@@ -2,6 +2,7 @@
 
 import { forwardRef } from "react"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 function formatFromCents(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", {
@@ -24,7 +25,7 @@ type CurrencyInputProps = {
  * dos centavos aparece sozinha (digitar 1 2 3 4 5 vira "123,45").
  */
 export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
-  function CurrencyInput({ value, onValueChange, ...props }, ref) {
+  function CurrencyInput({ value, onValueChange, className, ...props }, ref) {
     const display = value === null ? "" : formatFromCents(Math.round(value * 100))
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -47,7 +48,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
           inputMode="numeric"
           value={display}
           onChange={handleChange}
-          className="pl-9 tabular-nums"
+          className={cn("pl-9 tabular-nums", className)}
           {...props}
         />
       </div>

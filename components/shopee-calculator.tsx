@@ -341,7 +341,7 @@ export function ShopeeCalculator() {
                                 x={viewBox.cx}
                                 y={(viewBox.cy ?? 0) + 12}
                                 className={`text-lg font-bold ${
-                                  profitPositive ? "fill-[var(--color-profit)]" : "fill-destructive"
+                                  profitPositive ? "fill-[var(--color-lucro)]" : "fill-destructive"
                                 }`}
                               >
                                 {formatBRL(result.netProfit)}

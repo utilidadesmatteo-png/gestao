@@ -32,6 +32,7 @@ export function RegisterSaleDialog() {
   const [price, setPrice] = useState<number | null>(null)
   const [quantity, setQuantity] = useState("1")
   const [error, setError] = useState("")
+  const [saving, setSaving] = useState(false)
 
   const selected = products.find((p) => p.id === productId)
   const qtyNum = Number.parseInt(quantity, 10)
@@ -49,13 +50,15 @@ export function RegisterSaleDialog() {
     setError("")
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selected) return setError("Selecione um produto.")
     if (price === null || price < 0) return setError("Preço de venda inválido.")
     if (!Number.isInteger(qtyNum) || qtyNum <= 0) return setError("Quantidade inválida.")
 
-    const result = registerSale({ productId, salePrice: price, quantity: qtyNum })
+    setSaving(true)
+    const result = await registerSale({ productId, salePrice: price, quantity: qtyNum })
+    setSaving(false)
     if (!result.ok) return setError(result.error)
     reset()
     setOpen(false)
@@ -142,7 +145,9 @@ export function RegisterSaleDialog() {
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
           <DialogFooter>
-            <Button type="submit">Confirmar venda</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Registrando..." : "Confirmar venda"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

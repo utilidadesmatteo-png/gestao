@@ -25,6 +25,7 @@ export function AddProductDialog() {
   const [sale, setSale] = useState<number | null>(null)
   const [quantity, setQuantity] = useState("")
   const [error, setError] = useState("")
+  const [saving, setSaving] = useState(false)
 
   const hasValues = cost !== null && sale !== null
   const profit = hasValues ? unitProfit(cost, sale) : null
@@ -38,7 +39,7 @@ export function AddProductDialog() {
     setError("")
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const q = Number.parseInt(quantity, 10)
     if (!name.trim()) return setError("Informe o nome do produto.")
@@ -46,7 +47,10 @@ export function AddProductDialog() {
     if (sale === null || sale < 0) return setError("Preço de venda inválido.")
     if (!Number.isInteger(q) || q < 0) return setError("Quantidade inválida.")
 
-    addProduct({ name: name.trim(), costPrice: cost, salePrice: sale, quantity: q })
+    setSaving(true)
+    const result = await addProduct({ name: name.trim(), costPrice: cost, salePrice: sale, quantity: q })
+    setSaving(false)
+    if (!result.ok) return setError(result.error)
     reset()
     setOpen(false)
   }
@@ -148,7 +152,9 @@ export function AddProductDialog() {
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
           <DialogFooter>
-            <Button type="submit">Salvar produto</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Salvando..." : "Salvar produto"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

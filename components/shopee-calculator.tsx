@@ -98,17 +98,18 @@ export function ShopeeCalculator() {
     setExtras((prev) => prev.filter((e) => e.id !== id))
   }
 
-  function handleRegister() {
+  async function handleRegister() {
     const name = productName.trim()
     if (!name || quantity <= 0) return
     // Salva o custo do estoque como o investimento do bolso (produto + custos adicionais),
     // e o preço de venda como o preço simulado atual.
-    addProduct({
+    const res = await addProduct({
       name,
       costPrice: result.investment,
       salePrice: effectiveSale,
       quantity,
     })
+    if (!res.ok) return
     setRegisterOpen(false)
     setProductName("")
     setQuantity(1)

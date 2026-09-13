@@ -1,140 +1,202 @@
 "use client"
 
 import { useSyncExternalStore } from "react"
-import type { Product, Sale, StoreState } from "./types"
+import { createClient } from "@/lib/supabase/client"
+import type { Product, Sale } from "./types"
 
-const STORAGE_KEY = "estoque-shopee-v1"
+type StoreSnapshot = {
+  products: Product[]
+  sales: Sale[]
+  loading: boolean
+  loaded: boolean
+}
 
-const emptyState: StoreState = { products: [], sales: [] }
-
-let state: StoreState = emptyState
-let loaded = false
+let snapshot: StoreSnapshot = { products: [], sales: [], loading: false, loaded: false }
 const listeners = new Set<() => void>()
-
-function read(): StoreState {
-  if (typeof window === "undefined") return emptyState
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return emptyState
-    const parsed = JSON.parse(raw) as StoreState
-    return {
-      products: Array.isArray(parsed.products) ? parsed.products : [],
-      sales: Array.isArray(parsed.sales) ? parsed.sales : [],
-    }
-  } catch {
-    return emptyState
-  }
-}
-
-function ensureLoaded() {
-  if (!loaded && typeof window !== "undefined") {
-    state = read()
-    loaded = true
-  }
-}
-
-function persist() {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  }
-}
+let started = false
 
 function emit() {
   for (const listener of listeners) listener()
 }
 
-function setState(next: StoreState) {
-  state = next
-  persist()
+function setSnapshot(patch: Partial<StoreSnapshot>) {
+  snapshot = { ...snapshot, ...patch }
   emit()
 }
 
+// Converte as linhas do banco (snake_case) para os tipos do app (camelCase).
+function mapProduct(row: Record<string, unknown>): Product {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    costPrice: Number(row.cost_price),
+    salePrice: Number(row.sale_price),
+    quantity: Number(row.quantity),
+    createdAt: row.created_at ? Date.parse(String(row.created_at)) : Date.now(),
+  }
+}
+
+function mapSale(row: Record<string, unknown>): Sale {
+  return {
+    id: String(row.id),
+    productId: String(row.product_id),
+    productName: String(row.product_name),
+    costPrice: Number(row.cost_price),
+    salePrice: Number(row.sale_price),
+    quantity: Number(row.quantity),
+    createdAt: row.created_at ? Date.parse(String(row.created_at)) : Date.now(),
+  }
+}
+
+export async function refresh() {
+  const supabase = createClient()
+  setSnapshot({ loading: true })
+
+  const [productsRes, salesRes] = await Promise.all([
+    supabase.from("products").select("*").order("created_at", { ascending: false }),
+    supabase.from("sales").select("*").order("created_at", { ascending: false }),
+  ])
+
+  if (productsRes.error) console.log("[v0] products fetch error:", productsRes.error.message)
+  if (salesRes.error) console.log("[v0] sales fetch error:", salesRes.error.message)
+
+  setSnapshot({
+    products: (productsRes.data ?? []).map(mapProduct),
+    sales: (salesRes.data ?? []).map(mapSale),
+    loading: false,
+    loaded: true,
+  })
+}
+
 function subscribe(listener: () => void) {
-  ensureLoaded()
   listeners.add(listener)
+  if (!started) {
+    started = true
+    void refresh()
+  }
   return () => {
     listeners.delete(listener)
   }
 }
 
-function getSnapshot(): StoreState {
-  ensureLoaded()
-  return state
+function getSnapshot(): StoreSnapshot {
+  return snapshot
 }
 
-function getServerSnapshot(): StoreState {
-  return emptyState
-}
-
-function id() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+const serverSnapshot: StoreSnapshot = { products: [], sales: [], loading: false, loaded: false }
+function getServerSnapshot(): StoreSnapshot {
+  return serverSnapshot
 }
 
 export function useStore() {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
 }
 
-export function addProduct(input: {
+type Result = { ok: true } | { ok: false; error: string }
+
+export async function addProduct(input: {
   name: string
   costPrice: number
   salePrice: number
   quantity: number
-}) {
-  const product: Product = {
-    id: id(),
+}): Promise<Result> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: "Sessão expirada. Entre novamente." }
+
+  const { error } = await supabase.from("products").insert({
+    user_id: user.id,
     name: input.name,
-    costPrice: input.costPrice,
-    salePrice: input.salePrice,
+    cost_price: input.costPrice,
+    sale_price: input.salePrice,
     quantity: input.quantity,
-    createdAt: Date.now(),
+  })
+
+  if (error) {
+    console.log("[v0] addProduct error:", error.message)
+    return { ok: false, error: "Não foi possível salvar o produto." }
   }
-  setState({ ...state, products: [product, ...state.products] })
+
+  await refresh()
+  return { ok: true }
 }
 
-export function addStock(productId: string, amount: number) {
-  setState({
-    ...state,
-    products: state.products.map((p) =>
-      p.id === productId ? { ...p, quantity: p.quantity + amount } : p,
-    ),
-  })
+export async function addStock(productId: string, amount: number): Promise<Result> {
+  const supabase = createClient()
+  const product = snapshot.products.find((p) => p.id === productId)
+  if (!product) return { ok: false, error: "Produto não encontrado." }
+
+  const { error } = await supabase
+    .from("products")
+    .update({ quantity: product.quantity + amount })
+    .eq("id", productId)
+
+  if (error) {
+    console.log("[v0] addStock error:", error.message)
+    return { ok: false, error: "Não foi possível repor o estoque." }
+  }
+
+  await refresh()
+  return { ok: true }
 }
 
-export function removeProduct(productId: string) {
-  setState({
-    ...state,
-    products: state.products.filter((p) => p.id !== productId),
-  })
+export async function removeProduct(productId: string): Promise<Result> {
+  const supabase = createClient()
+  const { error } = await supabase.from("products").delete().eq("id", productId)
+
+  if (error) {
+    console.log("[v0] removeProduct error:", error.message)
+    return { ok: false, error: "Não foi possível excluir o produto." }
+  }
+
+  await refresh()
+  return { ok: true }
 }
 
-export function registerSale(input: {
+export async function registerSale(input: {
   productId: string
   salePrice: number
   quantity: number
-}) {
-  const product = state.products.find((p) => p.id === input.productId)
-  if (!product) return { ok: false as const, error: "Produto não encontrado." }
-  if (input.quantity <= 0) return { ok: false as const, error: "Quantidade inválida." }
+}): Promise<Result> {
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: "Sessão expirada. Entre novamente." }
+
+  const product = snapshot.products.find((p) => p.id === input.productId)
+  if (!product) return { ok: false, error: "Produto não encontrado." }
+  if (input.quantity <= 0) return { ok: false, error: "Quantidade inválida." }
   if (input.quantity > product.quantity) {
-    return { ok: false as const, error: "Quantidade maior que o estoque disponível." }
+    return { ok: false, error: "Quantidade maior que o estoque disponível." }
   }
 
-  const sale: Sale = {
-    id: id(),
-    productId: product.id,
-    productName: product.name,
-    costPrice: product.costPrice,
-    salePrice: input.salePrice,
+  const { error: saleError } = await supabase.from("sales").insert({
+    user_id: user.id,
+    product_id: product.id,
+    product_name: product.name,
+    cost_price: product.costPrice,
+    sale_price: input.salePrice,
     quantity: input.quantity,
-    createdAt: Date.now(),
-  }
-
-  setState({
-    products: state.products.map((p) =>
-      p.id === product.id ? { ...p, quantity: p.quantity - input.quantity } : p,
-    ),
-    sales: [sale, ...state.sales],
   })
 
-  return { ok: true as const }
+  if (saleError) {
+    console.log("[v0] registerSale insert error:", saleError.message)
+    return { ok: false, error: "Não foi possível registrar a venda." }
+  }
+
+  const { error: updateError } = await supabase
+    .from("products")
+    .update({ quantity: product.quantity - input.quantity })
+    .eq("id", product.id)
+
+  if (updateError) {
+    console.log("[v0] registerSale stock update error:", updateError.message)
+    return { ok: false, error: "Venda registrada, mas o estoque não baixou. Recarregue a página." }
+  }
+
+  await refresh()
+  return { ok: true }
 }

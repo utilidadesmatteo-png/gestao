@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { useStore } from "@/lib/store"
 import { computeSummary, SHOPEE_FIXED, SHOPEE_PERCENT } from "@/lib/calculations"
 import { StatCards } from "@/components/stat-cards"
@@ -7,71 +8,81 @@ import { AddProductDialog } from "@/components/add-product-dialog"
 import { RegisterSaleDialog } from "@/components/register-sale-dialog"
 import { ProductsTable } from "@/components/products-table"
 import { SalesTable } from "@/components/sales-table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { logout } from "@/app/login/actions"
-import { Store, LogOut } from "lucide-react"
+import { AppSidebar, type View } from "@/components/app-sidebar"
+import { Calculator } from "lucide-react"
+
+const titles: Record<View, { title: string; subtitle: string }> = {
+  painel: {
+    title: "Painel",
+    subtitle: "Visão geral do seu estoque, faturamento e lucro.",
+  },
+  estoque: {
+    title: "Estoque",
+    subtitle: "Todos os produtos com custo, venda, lucro e margem por unidade.",
+  },
+  vendas: {
+    title: "Vendas",
+    subtitle: "Histórico das vendas registradas e o lucro de cada uma.",
+  },
+  calculadora: {
+    title: "Calculadora Shopee",
+    subtitle: "Precifique seus produtos com base nas taxas da Shopee.",
+  },
+}
 
 export default function Page() {
   const { products, sales } = useStore()
   const summary = computeSummary(products, sales)
+  const [view, setView] = useState<View>("painel")
+
+  const feeLabel = `${SHOPEE_PERCENT * 100}% sobre o custo + R$${SHOPEE_FIXED.toFixed(2).replace(".", ",")} fixo por item`
 
   return (
-    <div className="min-h-svh">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
-        <header className="overflow-hidden rounded-2xl border bg-gradient-to-br from-primary to-primary/75 text-primary-foreground shadow-sm">
-          <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-            <div className="flex items-center gap-4">
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary-foreground/15 ring-1 ring-inset ring-primary-foreground/20">
-                <Store className="size-6" />
-              </span>
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-balance">
-                  Controle de Estoque Shopee
-                </h1>
-                <p className="mt-1 text-sm text-primary-foreground/85 text-pretty">
-                  Taxa aplicada: {SHOPEE_PERCENT * 100}% sobre o custo + {"R$"}
-                  {SHOPEE_FIXED.toFixed(2).replace(".", ",")} fixo por item.
-                </p>
-              </div>
+    <div className="flex min-h-svh flex-col bg-background lg:flex-row">
+      <AppSidebar view={view} onViewChange={setView} />
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
+          <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-balance">{titles[view].title}</h1>
+              <p className="mt-0.5 text-sm text-muted-foreground text-pretty">{titles[view].subtitle}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <RegisterSaleDialog />
               <AddProductDialog />
-              <form action={logout}>
-                <Button
-                  type="submit"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Sair"
-                  title="Sair"
-                  className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
-                >
-                  <LogOut className="size-4" />
-                </Button>
-              </form>
             </div>
           </div>
         </header>
 
-        <section className="mt-8" aria-label="Resumo do estoque">
-          <StatCards summary={summary} />
-        </section>
+        <main className="flex-1 px-5 py-6 sm:px-8 sm:py-8">
+          {view === "painel" && (
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-4 text-sm">
+                <span className="font-medium">Taxa da Shopee aplicada:</span>
+                <span className="text-muted-foreground">{feeLabel}</span>
+              </div>
+              <StatCards summary={summary} />
+            </div>
+          )}
 
-        <section className="mt-10">
-          <Tabs defaultValue="products">
-            <TabsList>
-              <TabsTrigger value="products">Estoque ({products.length})</TabsTrigger>
-              <TabsTrigger value="sales">Vendas ({sales.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="products" className="mt-4">
-              <ProductsTable products={products} />
-            </TabsContent>
-            <TabsContent value="sales" className="mt-4">
-              <SalesTable sales={sales} />
-            </TabsContent>
-          </Tabs>
-        </section>
+          {view === "estoque" && <ProductsTable products={products} />}
+
+          {view === "vendas" && <SalesTable sales={sales} />}
+
+          {view === "calculadora" && (
+            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center">
+              <span className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Calculator className="size-6" />
+              </span>
+              <h2 className="mt-4 text-lg font-semibold tracking-tight">Calculadora de precificação</h2>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground text-pretty">
+                Em breve. Aqui você vai poder simular preços de venda com base no custo,
+                nas taxas da Shopee e na margem de lucro desejada.
+              </p>
+            </div>
+          )}
+        </main>
       </div>
     </div>
   )

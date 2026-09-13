@@ -42,14 +42,14 @@ function StatCard({
   }
 
   return (
-    <Card className="p-5 transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-muted-foreground text-pretty">{title}</p>
-        <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${iconClasses[tone]}`}>
+    <Card className="group relative overflow-hidden p-5 transition-shadow hover:shadow-md">
+      <div className="flex items-center gap-3">
+        <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${iconClasses[tone]}`}>
           {icon}
         </span>
+        <p className="text-sm font-medium text-muted-foreground text-pretty">{title}</p>
       </div>
-      <p className={`mt-3 text-2xl font-semibold tracking-tight tabular-nums text-balance ${valueClasses[valueTone]}`}>
+      <p className={`mt-4 text-3xl font-semibold tracking-tight tabular-nums text-balance ${valueClasses[valueTone]}`}>
         {value}
       </p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground text-pretty">{hint}</p> : null}
@@ -59,7 +59,7 @@ function StatCard({
 
 export function StatCards({ summary }: { summary: Summary }) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
         title="Produtos cadastrados"
         value={String(summary.productCount)}
@@ -82,18 +82,29 @@ export function StatCards({ summary }: { summary: Summary }) {
         tone="neutral"
       />
       <StatCard
+        title="Produto mais vendido"
+        value={summary.topProduct ? summary.topProduct.name : "—"}
+        hint={
+          summary.topProduct
+            ? `${summary.topProduct.unitsSold} unidade(s) vendida(s)`
+            : "Nenhuma venda registrada ainda"
+        }
+        icon={<Trophy className="size-5" />}
+        tone="brand"
+      />
+      <StatCard
         title="Faturamento potencial"
         value={formatBRL(summary.potentialRevenue)}
         hint="Receita se vender todo o estoque"
         icon={<Receipt className="size-5" />}
-        tone="brand"
+        tone="neutral"
       />
       <StatCard
         title="Faturamento real"
         value={formatBRL(summary.realRevenue)}
         hint="Receita bruta das vendas feitas"
         icon={<Banknote className="size-5" />}
-        tone="brand"
+        tone="neutral"
       />
       <StatCard
         title="Lucro potencial"
@@ -110,17 +121,6 @@ export function StatCards({ summary }: { summary: Summary }) {
         icon={<BadgeDollarSign className="size-5" />}
         tone={summary.realProfit >= 0 ? "success" : "destructive"}
         valueTone={summary.realProfit >= 0 ? "success" : "destructive"}
-      />
-      <StatCard
-        title="Produto mais vendido"
-        value={summary.topProduct ? summary.topProduct.name : "—"}
-        hint={
-          summary.topProduct
-            ? `${summary.topProduct.unitsSold} unidade(s) vendida(s)`
-            : "Nenhuma venda registrada ainda"
-        }
-        icon={<Trophy className="size-5" />}
-        tone="brand"
       />
     </div>
   )

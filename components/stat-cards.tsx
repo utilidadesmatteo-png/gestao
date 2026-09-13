@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { formatBRL, type Summary } from "@/lib/calculations"
 import {
   Boxes,
@@ -9,38 +9,48 @@ import {
   Trophy,
 } from "lucide-react"
 
+type Tone = "brand" | "neutral" | "success" | "destructive"
+
 function StatCard({
   title,
   value,
   hint,
   icon,
-  accent,
+  tone = "neutral",
+  valueTone = "neutral",
 }: {
   title: string
   value: string
   hint?: string
   icon: React.ReactNode
-  accent?: "positive" | "negative" | "neutral"
+  tone?: Tone
+  valueTone?: Tone
 }) {
-  const valueColor =
-    accent === "positive"
-      ? "text-primary"
-      : accent === "negative"
-        ? "text-destructive"
-        : "text-foreground"
+  const iconClasses: Record<Tone, string> = {
+    brand: "bg-primary/10 text-primary",
+    neutral: "bg-muted text-muted-foreground",
+    success: "bg-success/10 text-success",
+    destructive: "bg-destructive/10 text-destructive",
+  }
+  const valueClasses: Record<Tone, string> = {
+    brand: "text-primary",
+    neutral: "text-foreground",
+    success: "text-success",
+    destructive: "text-destructive",
+  }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
-        <span className="text-muted-foreground">{icon}</span>
-      </CardHeader>
-      <CardContent>
-        <p className={`text-2xl font-semibold tracking-tight ${valueColor}`}>{value}</p>
-        {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
-      </CardContent>
+    <Card className="p-5 transition-shadow hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium text-muted-foreground text-pretty">{title}</p>
+        <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${iconClasses[tone]}`}>
+          {icon}
+        </span>
+      </div>
+      <p className={`mt-3 text-2xl font-semibold tracking-tight tabular-nums text-balance ${valueClasses[valueTone]}`}>
+        {value}
+      </p>
+      {hint ? <p className="mt-1 text-xs text-muted-foreground text-pretty">{hint}</p> : null}
     </Card>
   )
 }
@@ -53,32 +63,37 @@ export function StatCards({ summary }: { summary: Summary }) {
         value={String(summary.productCount)}
         hint="Tipos de produtos diferentes"
         icon={<Package className="size-5" />}
+        tone="brand"
       />
       <StatCard
         title="Itens em estoque"
         value={String(summary.totalUnits)}
         hint="Total de unidades disponíveis"
         icon={<Boxes className="size-5" />}
+        tone="brand"
       />
       <StatCard
         title="Investimento em estoque"
         value={formatBRL(summary.investment)}
         hint="Custo total do que está parado"
         icon={<Wallet className="size-5" />}
+        tone="neutral"
       />
       <StatCard
         title="Lucro potencial"
         value={formatBRL(summary.potentialProfit)}
         hint="Se vender todo o estoque atual"
         icon={<TrendingUp className="size-5" />}
-        accent={summary.potentialProfit >= 0 ? "positive" : "negative"}
+        tone={summary.potentialProfit >= 0 ? "success" : "destructive"}
+        valueTone={summary.potentialProfit >= 0 ? "success" : "destructive"}
       />
       <StatCard
         title="Lucro real"
         value={formatBRL(summary.realProfit)}
         hint="Já descontadas as taxas das vendas"
         icon={<BadgeDollarSign className="size-5" />}
-        accent={summary.realProfit >= 0 ? "positive" : "negative"}
+        tone={summary.realProfit >= 0 ? "success" : "destructive"}
+        valueTone={summary.realProfit >= 0 ? "success" : "destructive"}
       />
       <StatCard
         title="Produto mais vendido"
@@ -89,6 +104,7 @@ export function StatCards({ summary }: { summary: Summary }) {
             : "Nenhuma venda registrada ainda"
         }
         icon={<Trophy className="size-5" />}
+        tone="brand"
       />
     </div>
   )

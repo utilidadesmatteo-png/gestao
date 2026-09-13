@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { CurrencyInput } from "@/components/currency-input"
 import { Plus } from "lucide-react"
 import { addProduct } from "@/lib/store"
 import { formatBRL, unitProfit } from "@/lib/calculations"
@@ -20,22 +21,18 @@ import { formatBRL, unitProfit } from "@/lib/calculations"
 export function AddProductDialog() {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
-  const [cost, setCost] = useState("")
-  const [sale, setSale] = useState("")
+  const [cost, setCost] = useState<number | null>(null)
+  const [sale, setSale] = useState<number | null>(null)
   const [quantity, setQuantity] = useState("")
   const [error, setError] = useState("")
 
-  const costNum = Number.parseFloat(cost)
-  const saleNum = Number.parseFloat(sale)
   const preview =
-    Number.isFinite(costNum) && Number.isFinite(saleNum)
-      ? unitProfit(costNum, saleNum)
-      : null
+    cost !== null && sale !== null ? unitProfit(cost, sale) : null
 
   function reset() {
     setName("")
-    setCost("")
-    setSale("")
+    setCost(null)
+    setSale(null)
     setQuantity("")
     setError("")
   }
@@ -44,11 +41,11 @@ export function AddProductDialog() {
     e.preventDefault()
     const q = Number.parseInt(quantity, 10)
     if (!name.trim()) return setError("Informe o nome do produto.")
-    if (!Number.isFinite(costNum) || costNum < 0) return setError("Custo inválido.")
-    if (!Number.isFinite(saleNum) || saleNum < 0) return setError("Preço de venda inválido.")
+    if (cost === null || cost < 0) return setError("Custo inválido.")
+    if (sale === null || sale < 0) return setError("Preço de venda inválido.")
     if (!Number.isInteger(q) || q < 0) return setError("Quantidade inválida.")
 
-    addProduct({ name: name.trim(), costPrice: costNum, salePrice: saleNum, quantity: q })
+    addProduct({ name: name.trim(), costPrice: cost, salePrice: sale, quantity: q })
     reset()
     setOpen(false)
   }
@@ -62,7 +59,7 @@ export function AddProductDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button>
+        <Button className="shadow-sm">
           <Plus className="size-4" />
           Adicionar produto
         </Button>
@@ -87,28 +84,20 @@ export function AddProductDialog() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="product-cost">Preço de custo (R$)</Label>
-              <Input
+              <Label htmlFor="product-cost">Preço de custo</Label>
+              <CurrencyInput
                 id="product-cost"
-                type="number"
-                step="0.01"
-                min="0"
-                inputMode="decimal"
                 value={cost}
-                onChange={(e) => setCost(e.target.value)}
+                onValueChange={setCost}
                 placeholder="0,00"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="product-sale">Preço de venda (R$)</Label>
-              <Input
+              <Label htmlFor="product-sale">Preço de venda</Label>
+              <CurrencyInput
                 id="product-sale"
-                type="number"
-                step="0.01"
-                min="0"
-                inputMode="decimal"
                 value={sale}
-                onChange={(e) => setSale(e.target.value)}
+                onValueChange={setSale}
                 placeholder="0,00"
               />
             </div>
@@ -128,9 +117,9 @@ export function AddProductDialog() {
           </div>
 
           {preview !== null ? (
-            <div className="rounded-md border bg-muted/40 p-3 text-sm">
-              <span className="text-muted-foreground">Lucro por unidade (já com taxa Shopee): </span>
-              <span className={preview >= 0 ? "font-semibold text-primary" : "font-semibold text-destructive"}>
+            <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3 text-sm">
+              <span className="text-muted-foreground">Lucro por unidade (com taxa Shopee)</span>
+              <span className={preview >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
                 {formatBRL(preview)}
               </span>
             </div>

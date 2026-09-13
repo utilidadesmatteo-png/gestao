@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { CurrencyInput } from "@/components/currency-input"
 import { ShoppingCart } from "lucide-react"
 import { registerSale, useStore } from "@/lib/store"
 import { formatBRL, unitProfit } from "@/lib/calculations"
@@ -28,23 +29,22 @@ export function RegisterSaleDialog() {
   const { products } = useStore()
   const [open, setOpen] = useState(false)
   const [productId, setProductId] = useState("")
-  const [price, setPrice] = useState("")
+  const [price, setPrice] = useState<number | null>(null)
   const [quantity, setQuantity] = useState("1")
   const [error, setError] = useState("")
 
   const selected = products.find((p) => p.id === productId)
-  const priceNum = Number.parseFloat(price)
   const qtyNum = Number.parseInt(quantity, 10)
   const preview =
-    selected && Number.isFinite(priceNum)
-      ? unitProfit(selected.costPrice, priceNum) * (Number.isFinite(qtyNum) ? qtyNum : 0)
+    selected && price !== null
+      ? unitProfit(selected.costPrice, price) * (Number.isFinite(qtyNum) ? qtyNum : 0)
       : null
 
   const hasStock = products.some((p) => p.quantity > 0)
 
   function reset() {
     setProductId("")
-    setPrice("")
+    setPrice(null)
     setQuantity("1")
     setError("")
   }
@@ -52,10 +52,10 @@ export function RegisterSaleDialog() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selected) return setError("Selecione um produto.")
-    if (!Number.isFinite(priceNum) || priceNum < 0) return setError("Preço de venda inválido.")
+    if (price === null || price < 0) return setError("Preço de venda inválido.")
     if (!Number.isInteger(qtyNum) || qtyNum <= 0) return setError("Quantidade inválida.")
 
-    const result = registerSale({ productId, salePrice: priceNum, quantity: qtyNum })
+    const result = registerSale({ productId, salePrice: price, quantity: qtyNum })
     if (!result.ok) return setError(result.error)
     reset()
     setOpen(false)
@@ -70,7 +70,7 @@ export function RegisterSaleDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" disabled={!hasStock}>
+        <Button variant="secondary" className="shadow-sm" disabled={!hasStock}>
           <ShoppingCart className="size-4" />
           Registrar venda
         </Button>
@@ -90,7 +90,7 @@ export function RegisterSaleDialog() {
               onValueChange={(v) => {
                 setProductId(v)
                 const p = products.find((x) => x.id === v)
-                if (p) setPrice(String(p.salePrice))
+                if (p) setPrice(p.salePrice)
               }}
             >
               <SelectTrigger id="sale-product">
@@ -107,15 +107,11 @@ export function RegisterSaleDialog() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="sale-price">Preço de venda (R$)</Label>
-              <Input
+              <Label htmlFor="sale-price">Preço de venda</Label>
+              <CurrencyInput
                 id="sale-price"
-                type="number"
-                step="0.01"
-                min="0"
-                inputMode="decimal"
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onValueChange={setPrice}
                 placeholder="0,00"
               />
             </div>
@@ -135,9 +131,9 @@ export function RegisterSaleDialog() {
           </div>
 
           {preview !== null ? (
-            <div className="rounded-md border bg-muted/40 p-3 text-sm">
-              <span className="text-muted-foreground">Lucro desta venda (com taxa Shopee): </span>
-              <span className={preview >= 0 ? "font-semibold text-primary" : "font-semibold text-destructive"}>
+            <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3 text-sm">
+              <span className="text-muted-foreground">Lucro desta venda (com taxa Shopee)</span>
+              <span className={preview >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
                 {formatBRL(preview)}
               </span>
             </div>

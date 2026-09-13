@@ -16,7 +16,10 @@ import { Label } from "@/components/ui/label"
 import { CurrencyInput } from "@/components/currency-input"
 import { Plus, Trash2, Package, Megaphone, Truck } from "lucide-react"
 import { addProduct } from "@/lib/store"
-import { formatBRL, formatPercent, unitProfit, profitMargin, type ExtraCost } from "@/lib/calculations"
+import { formatBRL, formatPercent, unitProfit, profitMargin } from "@/lib/calculations"
+
+// Custo extra em edição: o valor pode ficar vazio (null) enquanto o usuário digita.
+type EditableExtra = { id: string; label: string; value: number | null }
 
 // Atalhos de custos comuns. Ao clicar, o custo é adicionado à lista.
 const quickCosts = [
@@ -31,21 +34,21 @@ export function AddProductDialog() {
   const [cost, setCost] = useState<number | null>(null)
   const [sale, setSale] = useState<number | null>(null)
   const [quantity, setQuantity] = useState("")
-  const [extras, setExtras] = useState<ExtraCost[]>([])
+  const [extras, setExtras] = useState<EditableExtra[]>([])
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
-  const extrasTotal = extras.reduce((acc, e) => acc + e.value, 0)
+  const extrasTotal = extras.reduce((acc, e) => acc + (e.value ?? 0), 0)
   const hasValues = cost !== null && sale !== null
   const totalCost = hasValues ? cost + extrasTotal : null
   const profit = totalCost !== null && sale !== null ? unitProfit(totalCost, sale) : null
   const margin = totalCost !== null && sale !== null ? profitMargin(totalCost, sale) : null
 
   function addExtra(label = "") {
-    setExtras((prev) => [...prev, { id: crypto.randomUUID(), label, value: 0 }])
+    setExtras((prev) => [...prev, { id: crypto.randomUUID(), label, value: null }])
   }
 
-  function updateExtra(id: string, patch: Partial<ExtraCost>) {
+  function updateExtra(id: string, patch: Partial<EditableExtra>) {
     setExtras((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
   }
 
@@ -171,7 +174,7 @@ export function AddProductDialog() {
                     />
                     <CurrencyInput
                       value={extra.value}
-                      onValueChange={(v) => updateExtra(extra.id, { value: v ?? 0 })}
+                      onValueChange={(v) => updateExtra(extra.id, { value: v })}
                       placeholder="0,00"
                       className="w-28"
                     />

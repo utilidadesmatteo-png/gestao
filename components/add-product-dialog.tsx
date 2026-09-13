@@ -14,9 +14,16 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CurrencyInput } from "@/components/currency-input"
-import { Plus } from "lucide-react"
+import { Plus, Trash2, Package, Megaphone, Truck } from "lucide-react"
 import { addProduct } from "@/lib/store"
-import { formatBRL, formatPercent, unitProfit, profitMargin } from "@/lib/calculations"
+import { formatBRL, formatPercent, unitProfit, profitMargin, type ExtraCost } from "@/lib/calculations"
+
+// Atalhos de custos comuns. Ao clicar, o custo é adicionado à lista.
+const quickCosts = [
+  { label: "Embalagem", icon: Package },
+  { label: "Shopee Ads", icon: Megaphone },
+  { label: "Frete", icon: Truck },
+] as const
 
 export function AddProductDialog() {
   const [open, setOpen] = useState(false)
@@ -24,18 +31,34 @@ export function AddProductDialog() {
   const [cost, setCost] = useState<number | null>(null)
   const [sale, setSale] = useState<number | null>(null)
   const [quantity, setQuantity] = useState("")
+  const [extras, setExtras] = useState<ExtraCost[]>([])
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
+  const extrasTotal = extras.reduce((acc, e) => acc + e.value, 0)
   const hasValues = cost !== null && sale !== null
-  const profit = hasValues ? unitProfit(cost, sale) : null
-  const margin = hasValues ? profitMargin(cost, sale) : null
+  const totalCost = hasValues ? cost + extrasTotal : null
+  const profit = totalCost !== null && sale !== null ? unitProfit(totalCost, sale) : null
+  const margin = totalCost !== null && sale !== null ? profitMargin(totalCost, sale) : null
+
+  function addExtra(label = "") {
+    setExtras((prev) => [...prev, { id: crypto.randomUUID(), label, value: 0 }])
+  }
+
+  function updateExtra(id: string, patch: Partial<ExtraCost>) {
+    setExtras((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
+  }
+
+  function removeExtra(id: string) {
+    setExtras((prev) => prev.filter((e) => e.id !== id))
+  }
 
   function reset() {
     setName("")
     setCost(null)
     setSale(null)
     setQuantity("")
+    setExtras([])
     setError("")
   }
 
@@ -48,7 +71,13 @@ export function AddProductDialog() {
     if (!Number.isInteger(q) || q < 0) return setError("Quantidade inválida.")
 
     setSaving(true)
-    const result = await addProduct({ name: name.trim(), costPrice: cost, salePrice: sale, quantity: q })
+    // O custo salvo é o investimento total por unidade: preço de custo + custos adicionais.
+    const result = await addProduct({
+      name: name.trim(),
+      costPrice: cost + extrasTotal,
+      salePrice: sale,
+      quantity: q,
+    })
     setSaving(false)
     if (!result.ok) return setError(result.error)
     reset()
@@ -67,11 +96,11 @@ export function AddProductDialog() {
         <Plus className="size-4" />
         Adicionar produto
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Adicionar produto ao estoque</DialogTitle>
           <DialogDescription>
-            Cadastre um produto com custo, preço de venda e quantidade inicial.
+            Cadastre um produto com custo, custos adicionais, preço de venda e quantidade inicial.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
@@ -105,6 +134,62 @@ export function AddProductDialog() {
               />
             </div>
           </div>
+
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label>Custos adicionais (por unidade)</Label>
+              <span className="text-xs text-muted-foreground">{formatBRL(extrasTotal)}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickCosts.map(({ label, icon: Icon }) => (
+                <Button
+                  key={label}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addExtra(label)}
+                >
+                  <Icon className="size-3.5" />
+                  {label}
+                </Button>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => addExtra()}>
+                <Plus className="size-3.5" />
+                Outro
+              </Button>
+            </div>
+
+            {extras.length > 0 ? (
+              <div className="grid gap-2 pt-1">
+                {extras.map((extra) => (
+                  <div key={extra.id} className="flex items-center gap-2">
+                    <Input
+                      value={extra.label}
+                      onChange={(e) => updateExtra(extra.id, { label: e.target.value })}
+                      placeholder="Descrição do custo"
+                      className="flex-1"
+                    />
+                    <CurrencyInput
+                      value={extra.value}
+                      onValueChange={(v) => updateExtra(extra.id, { value: v ?? 0 })}
+                      placeholder="0,00"
+                      className="w-28"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeExtra(extra.id)}
+                      aria-label="Remover custo"
+                    >
+                      <Trash2 className="size-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <div className="grid gap-2">
             <Label htmlFor="product-qty">Quantidade inicial</Label>
             <Input
@@ -119,19 +204,19 @@ export function AddProductDialog() {
             />
           </div>
 
-          {hasValues && profit !== null && margin !== null ? (
+          {hasValues && totalCost !== null && profit !== null && margin !== null ? (
             <div className="rounded-lg border bg-muted/40 p-3 text-sm">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Resumo por unidade (com taxa Shopee)
               </p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Custo</span>
-                  <span className="font-medium">{formatBRL(cost)}</span>
+                  <span className="text-muted-foreground">Custo total</span>
+                  <span className="font-medium">{formatBRL(totalCost)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Venda</span>
-                  <span className="font-medium">{formatBRL(sale)}</span>
+                  <span className="font-medium">{formatBRL(sale!)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Lucro</span>

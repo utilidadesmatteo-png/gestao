@@ -1,21 +1,9 @@
-import { NextResponse, type NextRequest } from "next/server"
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth"
+import { type NextRequest } from "next/server"
+import { updateSession } from "@/lib/supabase/proxy"
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
-  const token = request.cookies.get(SESSION_COOKIE)?.value
-  const isAuthenticated = await verifySessionToken(token)
-  const isLoginPage = pathname === "/login"
-
-  if (!isAuthenticated && !isLoginPage) {
-    return NextResponse.redirect(new URL("/login", request.url))
-  }
-
-  if (isAuthenticated && isLoginPage) {
-    return NextResponse.redirect(new URL("/", request.url))
-  }
-
-  return NextResponse.next()
+  // Renova a sessão do Supabase e protege as rotas.
+  return await updateSession(request)
 }
 
 export const config = {

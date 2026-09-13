@@ -21,9 +21,9 @@ function AddStockCell({ product }: { product: Product }) {
   const [editing, setEditing] = useState(false)
   const [amount, setAmount] = useState("")
 
-  function confirm() {
+  async function confirm() {
     const n = Number.parseInt(amount, 10)
-    if (Number.isInteger(n) && n > 0) addStock(product.id, n)
+    if (Number.isInteger(n) && n > 0) await addStock(product.id, n)
     setAmount("")
     setEditing(false)
   }

@@ -56,15 +56,6 @@ export function AppSidebar({
             >
               {item.icon}
               <span className="whitespace-nowrap">{item.label}</span>
-              {item.soon ? (
-                <span
-                  className={`ml-auto hidden rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide lg:inline ${
-                    active ? "bg-sidebar-primary-foreground/20" : "bg-sidebar-accent text-sidebar-foreground/70"
-                  }`}
-                >
-                  Em breve
-                </span>
-              ) : null}
             </button>
           )
         })}

@@ -6,7 +6,6 @@ import { CurrencyInput } from "@/components/currency-input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Slider } from "@/components/ui/slider"
 import {
   Dialog,
   DialogContent,
@@ -187,15 +186,27 @@ export function ShopeeCalculator() {
                 {adjust}%
               </span>
             </div>
-            <Slider
-              className="mt-3"
-              value={[adjust]}
-              onValueChange={([v]) => setAdjust(v)}
-              min={-50}
-              max={50}
-              step={1}
-              disabled={salePrice <= 0}
-            />
+            <div className={`relative mt-3 h-5 w-full ${salePrice <= 0 ? "opacity-50" : ""}`}>
+              {/* Trilho visual: fica atrás do input, sem capturar eventos. */}
+              <div className="pointer-events-none absolute top-1/2 left-0 h-1.5 w-full -translate-y-1/2 rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${adjust + 50}%` }}
+                />
+              </div>
+              {/* Input nativo transparente por cima: garante interação com mouse, toque e teclado. */}
+              <input
+                type="range"
+                min={-50}
+                max={50}
+                step={1}
+                value={adjust}
+                onChange={(e) => setAdjust(Number(e.target.value))}
+                disabled={salePrice <= 0}
+                aria-label="Simular variação do preço de venda"
+                className="absolute inset-0 h-5 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-ring [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:shadow-sm [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-ring [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow-sm"
+              />
+            </div>
             <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
               <span>-50%</span>
               <span>preço digitado</span>

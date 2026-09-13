@@ -16,6 +16,19 @@ export function unitProfit(costPrice: number, salePrice: number): number {
   return salePrice - costPrice - shopeeFee(costPrice)
 }
 
+/**
+ * Margem de lucro: quanto do preço de venda vira lucro, em %.
+ * Ex.: vender por R$50 com R$22 de lucro = 44% de margem.
+ */
+export function profitMargin(costPrice: number, salePrice: number): number {
+  if (salePrice <= 0) return 0
+  return (unitProfit(costPrice, salePrice) / salePrice) * 100
+}
+
+export function formatPercent(value: number): string {
+  return `${value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+}
+
 export function formatBRL(value: number): string {
   return value.toLocaleString("pt-BR", {
     style: "currency",

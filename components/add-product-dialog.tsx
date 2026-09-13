@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import { CurrencyInput } from "@/components/currency-input"
 import { Plus } from "lucide-react"
 import { addProduct } from "@/lib/store"
-import { formatBRL, unitProfit } from "@/lib/calculations"
+import { formatBRL, formatPercent, unitProfit, profitMargin } from "@/lib/calculations"
 
 export function AddProductDialog() {
   const [open, setOpen] = useState(false)
@@ -26,8 +26,9 @@ export function AddProductDialog() {
   const [quantity, setQuantity] = useState("")
   const [error, setError] = useState("")
 
-  const preview =
-    cost !== null && sale !== null ? unitProfit(cost, sale) : null
+  const hasValues = cost !== null && sale !== null
+  const profit = hasValues ? unitProfit(cost, sale) : null
+  const margin = hasValues ? profitMargin(cost, sale) : null
 
   function reset() {
     setName("")
@@ -116,12 +117,33 @@ export function AddProductDialog() {
             />
           </div>
 
-          {preview !== null ? (
-            <div className="flex items-center justify-between rounded-lg border bg-muted/40 p-3 text-sm">
-              <span className="text-muted-foreground">Lucro por unidade (com taxa Shopee)</span>
-              <span className={preview >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
-                {formatBRL(preview)}
-              </span>
+          {hasValues && profit !== null && margin !== null ? (
+            <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Resumo por unidade (com taxa Shopee)
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Custo</span>
+                  <span className="font-medium">{formatBRL(cost)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Venda</span>
+                  <span className="font-medium">{formatBRL(sale)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Lucro</span>
+                  <span className={profit >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
+                    {formatBRL(profit)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Margem</span>
+                  <span className={margin >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
+                    {formatPercent(margin)}
+                  </span>
+                </div>
+              </div>
             </div>
           ) : null}
 

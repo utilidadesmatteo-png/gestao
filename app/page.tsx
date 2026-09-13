@@ -8,7 +8,9 @@ import { RegisterSaleDialog } from "@/components/register-sale-dialog"
 import { ProductsTable } from "@/components/products-table"
 import { SalesTable } from "@/components/sales-table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Store } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { logout } from "@/app/login/actions"
+import { Store, LogOut } from "lucide-react"
 
 export default function Page() {
   const { products, sales } = useStore()
@@ -33,9 +35,21 @@ export default function Page() {
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <RegisterSaleDialog />
               <AddProductDialog />
+              <form action={logout}>
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Sair"
+                  title="Sair"
+                  className="text-primary-foreground hover:bg-primary-foreground/15 hover:text-primary-foreground"
+                >
+                  <LogOut className="size-4" />
+                </Button>
+              </form>
             </div>
           </div>
         </header>

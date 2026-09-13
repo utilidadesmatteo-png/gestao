@@ -101,13 +101,8 @@ export async function addProduct(input: {
   quantity: number
 }): Promise<Result> {
   const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: "Sessão expirada. Entre novamente." }
 
   const { error } = await supabase.from("products").insert({
-    user_id: user.id,
     name: input.name,
     cost_price: input.costPrice,
     sale_price: input.salePrice,
@@ -161,10 +156,6 @@ export async function registerSale(input: {
   quantity: number
 }): Promise<Result> {
   const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: "Sessão expirada. Entre novamente." }
 
   const product = snapshot.products.find((p) => p.id === input.productId)
   if (!product) return { ok: false, error: "Produto não encontrado." }
@@ -174,7 +165,6 @@ export async function registerSale(input: {
   }
 
   const { error: saleError } = await supabase.from("sales").insert({
-    user_id: user.id,
     product_id: product.id,
     product_name: product.name,
     cost_price: product.costPrice,

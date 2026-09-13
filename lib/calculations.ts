@@ -27,6 +27,8 @@ export type Summary = {
   productCount: number
   totalUnits: number
   investment: number
+  potentialRevenue: number
+  realRevenue: number
   potentialProfit: number
   realProfit: number
   topProduct: { name: string; unitsSold: number } | null
@@ -36,6 +38,10 @@ export function computeSummary(products: Product[], sales: Sale[]): Summary {
   const productCount = products.length
   const totalUnits = products.reduce((acc, p) => acc + p.quantity, 0)
   const investment = products.reduce((acc, p) => acc + p.costPrice * p.quantity, 0)
+
+  // Faturamento = receita bruta da venda (preço de venda x quantidade), sem descontar custo nem taxa.
+  const potentialRevenue = products.reduce((acc, p) => acc + p.salePrice * p.quantity, 0)
+  const realRevenue = sales.reduce((acc, s) => acc + s.salePrice * s.quantity, 0)
 
   const potentialProfit = products.reduce(
     (acc, p) => acc + unitProfit(p.costPrice, p.salePrice) * p.quantity,
@@ -64,5 +70,14 @@ export function computeSummary(products: Product[], sales: Sale[]): Summary {
     }
   }
 
-  return { productCount, totalUnits, investment, potentialProfit, realProfit, topProduct }
+  return {
+    productCount,
+    totalUnits,
+    investment,
+    potentialRevenue,
+    realRevenue,
+    potentialProfit,
+    realProfit,
+    topProduct,
+  }
 }

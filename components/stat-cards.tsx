@@ -7,6 +7,8 @@ import {
   TrendingUp,
   BadgeDollarSign,
   Trophy,
+  Receipt,
+  Banknote,
 } from "lucide-react"
 
 type Tone = "brand" | "neutral" | "success" | "destructive"
@@ -78,6 +80,20 @@ export function StatCards({ summary }: { summary: Summary }) {
         hint="Custo total do que está parado"
         icon={<Wallet className="size-5" />}
         tone="neutral"
+      />
+      <StatCard
+        title="Faturamento potencial"
+        value={formatBRL(summary.potentialRevenue)}
+        hint="Receita se vender todo o estoque"
+        icon={<Receipt className="size-5" />}
+        tone="brand"
+      />
+      <StatCard
+        title="Faturamento real"
+        value={formatBRL(summary.realRevenue)}
+        hint="Receita bruta das vendas feitas"
+        icon={<Banknote className="size-5" />}
+        tone="brand"
       />
       <StatCard
         title="Lucro potencial"

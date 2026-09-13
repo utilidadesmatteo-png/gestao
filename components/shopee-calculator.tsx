@@ -30,12 +30,22 @@ const chartConfig = {
   lucro: { label: "Lucro líquido", color: "#16a34a" },
 } satisfies ChartConfig
 
+// Atalhos de custos comuns. Ao clicar, o custo é adicionado à lista (não fica fixo na tela).
+const quickCosts = [
+  { label: "Embalagem", icon: Package },
+  { label: "Shopee Ads", icon: Megaphone },
+  { label: "Frete", icon: Truck },
+] as const
+
+const costIcons: Record<string, typeof Package> = {
+  Embalagem: Package,
+  "Shopee Ads": Megaphone,
+  Frete: Truck,
+}
+
 export function ShopeeCalculator() {
   const [costPrice, setCostPrice] = useState(0)
   const [salePrice, setSalePrice] = useState(0)
-  const [packaging, setPackaging] = useState(0)
-  const [ads, setAds] = useState(0)
-  const [freight, setFreight] = useState(0)
   const [extras, setExtras] = useState<ExtraCost[]>([])
   const [adjust, setAdjust] = useState(0)
 
@@ -45,14 +55,14 @@ export function ShopeeCalculator() {
   const result = computeCalculator({
     costPrice,
     salePrice: effectiveSale,
-    packaging,
-    ads,
-    freight,
+    packaging: 0,
+    ads: 0,
+    freight: 0,
     extras,
   })
 
-  function addExtra() {
-    setExtras((prev) => [...prev, { id: crypto.randomUUID(), label: "", value: 0 }])
+  function addExtra(label = "") {
+    setExtras((prev) => [...prev, { id: crypto.randomUUID(), label, value: 0 }])
   }
 
   function updateExtra(id: string, patch: Partial<ExtraCost>) {
@@ -64,13 +74,12 @@ export function ShopeeCalculator() {
   }
 
   const profitPositive = result.netProfit >= 0
-  const additionalCosts = packaging + ads + freight + result.extrasTotal
 
   const pieData = [
     { key: "custo", value: costPrice },
     { key: "comissao", value: result.commission },
     { key: "fixa", value: result.fixedFee },
-    { key: "adicionais", value: additionalCosts },
+    { key: "adicionais", value: result.extrasTotal },
     { key: "lucro", value: Math.max(result.netProfit, 0) },
   ]
     .filter((d) => d.value > 0)
@@ -152,73 +161,84 @@ export function ShopeeCalculator() {
         </section>
 
         <section className="rounded-xl border bg-card p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Custos adicionais
-          </h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="calc-pack" className="flex items-center gap-1.5">
-                <Package className="size-3.5 text-muted-foreground" /> Embalagem
-              </Label>
-              <CurrencyInput id="calc-pack" value={packaging} onValueChange={setPackaging} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="calc-ads" className="flex items-center gap-1.5">
-                <Megaphone className="size-3.5 text-muted-foreground" /> Shopee Ads
-              </Label>
-              <CurrencyInput id="calc-ads" value={ads} onValueChange={setAds} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="calc-freight" className="flex items-center gap-1.5">
-                <Truck className="size-3.5 text-muted-foreground" /> Frete
-              </Label>
-              <CurrencyInput id="calc-freight" value={freight} onValueChange={setFreight} />
-            </div>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              Custos adicionais
+            </h2>
+            <span className="text-xs text-muted-foreground">opcional</span>
           </div>
 
           {extras.length > 0 && (
             <div className="mt-4 flex flex-col gap-3">
-              {extras.map((extra) => (
-                <div key={extra.id} className="flex items-end gap-2">
-                  <div className="flex flex-1 flex-col gap-1.5">
-                    <Label htmlFor={`extra-label-${extra.id}`} className="text-xs">
-                      Nome do custo
-                    </Label>
-                    <Input
-                      id={`extra-label-${extra.id}`}
-                      value={extra.label}
-                      onChange={(e) => updateExtra(extra.id, { label: e.target.value })}
-                      placeholder="Ex.: etiqueta, brinde"
-                    />
+              {extras.map((extra) => {
+                const Icon = costIcons[extra.label]
+                return (
+                  <div key={extra.id} className="flex items-end gap-2">
+                    <div className="flex flex-1 flex-col gap-1.5">
+                      <Label htmlFor={`extra-label-${extra.id}`} className="flex items-center gap-1.5 text-xs">
+                        {Icon && <Icon className="size-3.5 text-muted-foreground" />}
+                        Nome do custo
+                      </Label>
+                      <Input
+                        id={`extra-label-${extra.id}`}
+                        value={extra.label}
+                        onChange={(e) => updateExtra(extra.id, { label: e.target.value })}
+                        placeholder="Ex.: etiqueta, brinde"
+                      />
+                    </div>
+                    <div className="flex w-32 flex-col gap-1.5">
+                      <Label htmlFor={`extra-value-${extra.id}`} className="text-xs">
+                        Valor
+                      </Label>
+                      <CurrencyInput
+                        id={`extra-value-${extra.id}`}
+                        value={extra.value}
+                        onValueChange={(v) => updateExtra(extra.id, { value: v })}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => removeExtra(extra.id)}
+                      aria-label="Remover custo"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
                   </div>
-                  <div className="flex w-32 flex-col gap-1.5">
-                    <Label htmlFor={`extra-value-${extra.id}`} className="text-xs">
-                      Valor
-                    </Label>
-                    <CurrencyInput
-                      id={`extra-value-${extra.id}`}
-                      value={extra.value}
-                      onValueChange={(v) => updateExtra(extra.id, { value: v })}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => removeExtra(extra.id)}
-                    aria-label="Remover custo"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
-          <Button type="button" variant="outline" size="sm" className="mt-4" onClick={addExtra}>
-            <Plus className="size-4" /> Adicionar custo extra
-          </Button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {quickCosts.map((qc) => {
+              const Icon = qc.icon
+              const alreadyAdded = extras.some((e) => e.label === qc.label)
+              return (
+                <Button
+                  key={qc.label}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addExtra(qc.label)}
+                  disabled={alreadyAdded}
+                >
+                  <Icon className="size-4" /> {qc.label}
+                </Button>
+              )
+            })}
+            <Button type="button" variant="outline" size="sm" onClick={() => addExtra()}>
+              <Plus className="size-4" /> Outro custo
+            </Button>
+          </div>
+
+          {extras.length === 0 && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Nenhum custo adicional. Adicione embalagem, Ads, frete ou outro custo só se precisar.
+            </p>
+          )}
         </section>
 
         {/* Gráfico de composição do preço */}
@@ -353,12 +373,14 @@ export function ShopeeCalculator() {
               muted
             />
             <Row label="Taxa fixa" value={`- ${formatBRL(result.fixedFee)}`} muted />
-            <Row label="Embalagem" value={`- ${formatBRL(packaging)}`} muted />
-            <Row label="Shopee Ads" value={`- ${formatBRL(ads)}`} muted />
-            <Row label="Frete" value={`- ${formatBRL(freight)}`} muted />
-            {result.extrasTotal > 0 && (
-              <Row label="Custos extras" value={`- ${formatBRL(result.extrasTotal)}`} muted />
-            )}
+            {extras.map((extra) => (
+              <Row
+                key={extra.id}
+                label={extra.label.trim() || "Custo adicional"}
+                value={`- ${formatBRL(extra.value)}`}
+                muted
+              />
+            ))}
             <Row label="Custo total" value={formatBRL(result.totalCost)} strong />
             <Row
               label="Lucro líquido"

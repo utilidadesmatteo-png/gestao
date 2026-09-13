@@ -50,50 +50,101 @@ create policy "sales_update_own" on public.sales for update using (auth.uid() = 
 create policy "sales_delete_own" on public.sales for delete using (auth.uid() = user_id);
 `
 
-// Descobre a senha: aceita SUPABASE_DB_PASSWORD (preferido) ou extrai da SUPABASE_DB_URL.
-function resolvePassword() {
-  const raw = process.env.SUPABASE_DB_PASSWORD
-  if (raw && raw.trim() && !raw.includes("[") && !raw.includes("YOUR-PASSWORD")) {
-    return raw.trim()
-  }
-  const url = process.env.SUPABASE_DB_URL
-  if (url) {
-    const match = url.match(/postgres(?:ql)?:\/\/[^:]+:([^@]+)@/)
-    if (match && match[1] && !match[1].includes("YOUR-PASSWORD") && !match[1].includes("[")) {
-      return decodeURIComponent(match[1])
+function isPlaceholder(v) {
+  return !v || v.includes("YOUR-PASSWORD") || v.includes("YOUR_PASSWORD")
+}
+
+// Extrai user/senha/host/porta de uma URL postgres, TOLERANDO espacos em volta
+// da senha (": senha @") e colchetes ao redor dela ("[senha]").
+function extractConnParts(text) {
+  if (!text) return []
+  const results = []
+  const re = /postgres(?:ql)?:\/\/([^:@\s]+):\s*([^@]*?)\s*@([^:/\s]+):(\d+)/g
+  let m
+  while ((m = re.exec(text)) !== null) {
+    const user = decodeURIComponent(m[1])
+    let password = m[2].replace(/[[\]]/g, "").trim()
+    try {
+      password = decodeURIComponent(password)
+    } catch {
+      // mantem literal se nao for percent-encoding valido
+    }
+    const host = m[3]
+    const port = Number(m[4]) || 5432
+    if (password && !isPlaceholder(password)) {
+      results.push({ user, password, host, port })
     }
   }
-  return null
+  return results
 }
 
-const password = resolvePassword()
+// Monta candidatos de conexão a partir de tudo que temos.
+function buildCandidates() {
+  const candidates = []
+  const seen = new Set()
 
-if (!password) {
-  console.error("[v0] Nenhuma senha de banco válida encontrada.")
-  console.error("[v0] Defina SUPABASE_DB_PASSWORD com a senha real do banco (sem colchetes).")
-  process.exit(2)
+  const push = (c) => {
+    const key = `${c.host}:${c.port}:${c.user}`
+    if (!seen.has(key) && c.password && !isPlaceholder(c.password)) {
+      seen.add(key)
+      candidates.push(c)
+    }
+  }
+
+  // 1) Partes extraidas das URLs presentes nas variaveis (host/user/senha da propria URL).
+  let derivedPassword = null
+  for (const varName of ["SUPABASE_DB_PASSWORD", "SUPABASE_DB_URL"]) {
+    for (const parts of extractConnParts(process.env[varName])) {
+      if (!derivedPassword) derivedPassword = parts.password
+      push({
+        label: `URL de ${varName} (${parts.host}:${parts.port})`,
+        host: parts.host,
+        port: parts.port,
+        user: parts.user || "postgres",
+        password: parts.password,
+      })
+    }
+  }
+
+  // 2) Senha pura (quando SUPABASE_DB_PASSWORD e so a senha, sem URL).
+  const rawPass = (process.env.SUPABASE_DB_PASSWORD || "").trim()
+  if (!derivedPassword && rawPass && !rawPass.includes("postgres") && !isPlaceholder(rawPass)) {
+    derivedPassword = rawPass.replace(/[[\]]/g, "").trim()
+  }
+
+  // 3) Senha aplicada aos endpoints conhecidos (fallback).
+  if (derivedPassword) {
+    const endpoints = [
+      { label: "pooler aws-0 sa-east-1 (session 5432)", host: "aws-0-sa-east-1.pooler.supabase.com", port: 5432, user: `postgres.${PROJECT_REF}` },
+      { label: "pooler aws-0 sa-east-1 (transaction 6543)", host: "aws-0-sa-east-1.pooler.supabase.com", port: 6543, user: `postgres.${PROJECT_REF}` },
+      { label: "conexao direta (IPv6)", host: `db.${PROJECT_REF}.supabase.co`, port: 5432, user: "postgres" },
+    ]
+    for (const e of endpoints) push({ ...e, password: derivedPassword })
+  }
+
+  return candidates
 }
-
-// Endereços candidatos, do mais provável (pooler IPv4, São Paulo) ao direto (IPv6).
-const candidates = [
-  { label: "pooler aws-0 sa-east-1 (session 5432)", host: "aws-0-sa-east-1.pooler.supabase.com", port: 5432, user: `postgres.${PROJECT_REF}` },
-  { label: "pooler aws-1 sa-east-1 (session 5432)", host: "aws-1-sa-east-1.pooler.supabase.com", port: 5432, user: `postgres.${PROJECT_REF}` },
-  { label: "pooler aws-0 sa-east-1 (transaction 6543)", host: "aws-0-sa-east-1.pooler.supabase.com", port: 6543, user: `postgres.${PROJECT_REF}` },
-  { label: "conexão direta (IPv6)", host: `db.${PROJECT_REF}.supabase.co`, port: 5432, user: "postgres" },
-]
 
 async function tryCandidate(c) {
   const client = new Client({
     host: c.host,
     port: c.port,
     user: c.user,
-    password,
+    password: c.password,
     database: "postgres",
     ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 10000,
   })
   await client.connect()
   return client
+}
+
+const candidates = buildCandidates()
+
+if (candidates.length === 0) {
+  console.error("[v0] Nenhuma credencial de banco valida encontrada.")
+  console.error("[v0] Defina SUPABASE_DB_PASSWORD com a senha real do banco (sem colchetes, sem [YOUR-PASSWORD]).")
+  process.exit(2)
 }
 
 let connected = null
@@ -109,13 +160,13 @@ for (const c of candidates) {
 }
 
 if (!connected) {
-  console.error("[v0] Não foi possível conectar em nenhum endereço. Verifique se a senha está correta.")
+  console.error("[v0] Nao foi possivel conectar. A senha do banco parece estar incorreta.")
   process.exit(3)
 }
 
 try {
   await connected.query(sql)
-  console.log("[v0] Tabelas e políticas RLS criadas com sucesso")
+  console.log("[v0] Tabelas e politicas RLS criadas com sucesso")
   const res = await connected.query(
     "select table_name from information_schema.tables where table_schema = 'public' and table_name in ('products','sales') order by table_name",
   )

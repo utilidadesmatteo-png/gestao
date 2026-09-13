@@ -4,16 +4,16 @@ export const SHOPEE_PERCENT = 0.2
 export const SHOPEE_FIXED = 4
 
 /**
- * Taxa da Shopee por item: 20% sobre o CUSTO do produto + R$4 fixo.
- * Definido pelo usuário: a taxa incide sobre o custo, não sobre a venda.
+ * Taxa da Shopee por item: 20% sobre o PREÇO DE VENDA + R$4 fixo.
+ * Definido pelo usuário: a taxa incide sobre a venda, como no extrato real da Shopee.
  */
-export function shopeeFee(costPrice: number): number {
-  return costPrice * SHOPEE_PERCENT + SHOPEE_FIXED
+export function shopeeFee(salePrice: number): number {
+  return salePrice * SHOPEE_PERCENT + SHOPEE_FIXED
 }
 
 /** Lucro líquido de uma unidade: venda - custo - taxa. */
 export function unitProfit(costPrice: number, salePrice: number): number {
-  return salePrice - costPrice - shopeeFee(costPrice)
+  return salePrice - costPrice - shopeeFee(salePrice)
 }
 
 /**
@@ -64,13 +64,13 @@ export type CalculatorResult = {
 
 /**
  * Calculadora de precificação Shopee.
- * Comissão = 20% sobre o custo do produto. Taxa fixa = R$4 por item.
+ * Comissão = 20% sobre o preço de venda. Taxa fixa = R$4 por item.
  * Custo total = custo + embalagem + ads + frete + extras + taxa Shopee.
  * Lucro líquido = preço de venda - custo total.
  * Margem = lucro líquido / preço de venda. ROI = lucro líquido / custo total.
  */
 export function computeCalculator(input: CalculatorInput): CalculatorResult {
-  const commission = input.costPrice * SHOPEE_PERCENT
+  const commission = input.salePrice * SHOPEE_PERCENT
   const fixedFee = SHOPEE_FIXED
   const shopeeFee = commission + fixedFee
   const extrasTotal = input.extras.reduce((acc, e) => acc + e.value, 0)

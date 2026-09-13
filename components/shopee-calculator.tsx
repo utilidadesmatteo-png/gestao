@@ -1,19 +1,34 @@
 "use client"
 
 import { useState } from "react"
+import { Cell, Label as PieLabel, Pie, PieChart } from "recharts"
 import { CurrencyInput } from "@/components/currency-input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Slider } from "@/components/ui/slider"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart"
 import {
   computeCalculator,
   formatBRL,
   formatPercent,
-  SHOPEE_FIXED,
   SHOPEE_PERCENT,
   type ExtraCost,
 } from "@/lib/calculations"
-import { Plus, Trash2, Package, Megaphone, Truck, TrendingUp } from "lucide-react"
+import { Plus, Trash2, Package, Megaphone, Truck, TrendingUp, PieChartIcon, RotateCcw } from "lucide-react"
+
+const chartConfig = {
+  custo: { label: "Custo do produto", color: "#64748b" },
+  comissao: { label: "Comissão Shopee", color: "#f97316" },
+  fixa: { label: "Taxa fixa", color: "#fb923c" },
+  adicionais: { label: "Custos adicionais", color: "#fdba74" },
+  lucro: { label: "Lucro líquido", color: "#16a34a" },
+} satisfies ChartConfig
 
 export function ShopeeCalculator() {
   const [costPrice, setCostPrice] = useState(0)
@@ -22,14 +37,22 @@ export function ShopeeCalculator() {
   const [ads, setAds] = useState(0)
   const [freight, setFreight] = useState(0)
   const [extras, setExtras] = useState<ExtraCost[]>([])
+  const [adjust, setAdjust] = useState(0)
 
-  const result = computeCalculator({ costPrice, salePrice, packaging, ads, freight, extras })
+  // O slider varia o preço de venda digitado de -50% a +50% para simular margens.
+  const effectiveSale = salePrice > 0 ? salePrice * (1 + adjust / 100) : 0
+
+  const result = computeCalculator({
+    costPrice,
+    salePrice: effectiveSale,
+    packaging,
+    ads,
+    freight,
+    extras,
+  })
 
   function addExtra() {
-    setExtras((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), label: "", value: 0 },
-    ])
+    setExtras((prev) => [...prev, { id: crypto.randomUUID(), label: "", value: 0 }])
   }
 
   function updateExtra(id: string, patch: Partial<ExtraCost>) {
@@ -41,6 +64,23 @@ export function ShopeeCalculator() {
   }
 
   const profitPositive = result.netProfit >= 0
+  const additionalCosts = packaging + ads + freight + result.extrasTotal
+
+  const pieData = [
+    { key: "custo", value: costPrice },
+    { key: "comissao", value: result.commission },
+    { key: "fixa", value: result.fixedFee },
+    { key: "adicionais", value: additionalCosts },
+    { key: "lucro", value: Math.max(result.netProfit, 0) },
+  ]
+    .filter((d) => d.value > 0)
+    .map((d) => ({
+      ...d,
+      name: chartConfig[d.key as keyof typeof chartConfig].label,
+      fill: `var(--color-${d.key})`,
+    }))
+
+  const hasData = effectiveSale > 0
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
@@ -58,6 +98,55 @@ export function ShopeeCalculator() {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="calc-sale">Preço de venda</Label>
               <CurrencyInput id="calc-sale" value={salePrice} onValueChange={setSalePrice} />
+            </div>
+          </div>
+
+          {/* Simulador de preço */}
+          <div className="mt-5 rounded-lg border bg-muted/30 p-4">
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+                Simular preço de venda
+              </Label>
+              {adjust !== 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 gap-1 px-2 text-xs text-muted-foreground"
+                  onClick={() => setAdjust(0)}
+                >
+                  <RotateCcw className="size-3" /> Zerar
+                </Button>
+              )}
+            </div>
+            <div className="mt-3 flex items-baseline justify-between">
+              <span className="text-2xl font-bold tracking-tight">{formatBRL(effectiveSale)}</span>
+              <span
+                className={`text-sm font-semibold tabular-nums ${
+                  adjust > 0
+                    ? "text-[var(--color-profit)]"
+                    : adjust < 0
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                }`}
+              >
+                {adjust > 0 ? "+" : ""}
+                {adjust}%
+              </span>
+            </div>
+            <Slider
+              className="mt-3"
+              value={[adjust]}
+              onValueChange={([v]) => setAdjust(v)}
+              min={-50}
+              max={50}
+              step={1}
+              disabled={salePrice <= 0}
+            />
+            <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
+              <span>-50%</span>
+              <span>preço digitado</span>
+              <span>+50%</span>
             </div>
           </div>
         </section>
@@ -131,6 +220,93 @@ export function ShopeeCalculator() {
             <Plus className="size-4" /> Adicionar custo extra
           </Button>
         </section>
+
+        {/* Gráfico de composição do preço */}
+        <section className="rounded-xl border bg-card p-5">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <PieChartIcon className="size-4" /> Composição do preço
+          </h2>
+          {hasData ? (
+            <div className="mt-4 grid items-center gap-4 sm:grid-cols-[240px_1fr]">
+              <ChartContainer config={chartConfig} className="mx-auto aspect-square w-full max-w-[240px]">
+                <PieChart>
+                  <ChartTooltip
+                    cursor={false}
+                    content={
+                      <ChartTooltipContent
+                        hideLabel
+                        formatter={(value, name) => (
+                          <div className="flex w-full items-center justify-between gap-3">
+                            <span className="text-muted-foreground">{name}</span>
+                            <span className="font-medium tabular-nums text-foreground">
+                              {formatBRL(Number(value))}
+                            </span>
+                          </div>
+                        )}
+                      />
+                    }
+                  />
+                  <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={62} strokeWidth={3}>
+                    {pieData.map((entry) => (
+                      <Cell key={entry.key} fill={entry.fill} />
+                    ))}
+                    <PieLabel
+                      content={({ viewBox }) => {
+                        if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                          return (
+                            <text x={viewBox.cx} y={viewBox.cy} textAnchor="middle" dominantBaseline="middle">
+                              <tspan
+                                x={viewBox.cx}
+                                y={(viewBox.cy ?? 0) - 8}
+                                className="fill-muted-foreground text-xs"
+                              >
+                                Lucro
+                              </tspan>
+                              <tspan
+                                x={viewBox.cx}
+                                y={(viewBox.cy ?? 0) + 12}
+                                className={`text-lg font-bold ${
+                                  profitPositive ? "fill-[var(--color-profit)]" : "fill-destructive"
+                                }`}
+                              >
+                                {formatBRL(result.netProfit)}
+                              </tspan>
+                            </text>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+
+              <ul className="flex flex-col gap-2.5 text-sm">
+                {pieData.map((entry) => {
+                  const share = effectiveSale > 0 ? (entry.value / effectiveSale) * 100 : 0
+                  return (
+                    <li key={entry.key} className="flex items-center gap-2.5">
+                      <span
+                        className="size-3 shrink-0 rounded-[3px]"
+                        style={{ backgroundColor: entry.fill }}
+                        aria-hidden
+                      />
+                      <span className="flex-1 text-muted-foreground">{entry.name}</span>
+                      <span className="tabular-nums font-medium">{formatBRL(entry.value)}</span>
+                      <span className="w-12 text-right tabular-nums text-xs text-muted-foreground">
+                        {share.toFixed(0)}%
+                      </span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Preencha o custo e o preço de venda para ver a composição do preço.
+            </p>
+          )}
+        </section>
       </div>
 
       {/* Resultado */}
@@ -169,7 +345,7 @@ export function ShopeeCalculator() {
           </div>
 
           <dl className="flex flex-col divide-y text-sm">
-            <Row label="Preço de venda" value={formatBRL(salePrice)} />
+            <Row label="Preço de venda" value={formatBRL(effectiveSale)} />
             <Row label="Custo do produto" value={`- ${formatBRL(costPrice)}`} muted />
             <Row
               label={`Comissão Shopee (${SHOPEE_PERCENT * 100}%)`}

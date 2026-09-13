@@ -36,6 +36,64 @@ export function formatBRL(value: number): string {
   })
 }
 
+export type ExtraCost = {
+  id: string
+  label: string
+  value: number
+}
+
+export type CalculatorInput = {
+  costPrice: number
+  salePrice: number
+  packaging: number
+  ads: number
+  freight: number
+  extras: ExtraCost[]
+}
+
+export type CalculatorResult = {
+  commission: number
+  fixedFee: number
+  shopeeFee: number
+  extrasTotal: number
+  totalCost: number
+  netProfit: number
+  margin: number
+  roi: number
+}
+
+/**
+ * Calculadora de precificação Shopee.
+ * Comissão = 20% sobre o custo do produto. Taxa fixa = R$4 por item.
+ * Custo total = custo + embalagem + ads + frete + extras + taxa Shopee.
+ * Lucro líquido = preço de venda - custo total.
+ * Margem = lucro líquido / preço de venda. ROI = lucro líquido / custo total.
+ */
+export function computeCalculator(input: CalculatorInput): CalculatorResult {
+  const commission = input.costPrice * SHOPEE_PERCENT
+  const fixedFee = SHOPEE_FIXED
+  const shopeeFee = commission + fixedFee
+  const extrasTotal = input.extras.reduce((acc, e) => acc + e.value, 0)
+
+  const totalCost =
+    input.costPrice + input.packaging + input.ads + input.freight + extrasTotal + shopeeFee
+
+  const netProfit = input.salePrice - totalCost
+  const margin = input.salePrice > 0 ? (netProfit / input.salePrice) * 100 : 0
+  const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0
+
+  return {
+    commission,
+    fixedFee,
+    shopeeFee,
+    extrasTotal,
+    totalCost,
+    netProfit,
+    margin,
+    roi,
+  }
+}
+
 export type Summary = {
   productCount: number
   totalUnits: number

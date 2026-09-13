@@ -9,7 +9,7 @@ import { RegisterSaleDialog } from "@/components/register-sale-dialog"
 import { ProductsTable } from "@/components/products-table"
 import { SalesTable } from "@/components/sales-table"
 import { AppSidebar, type View } from "@/components/app-sidebar"
-import { Calculator } from "lucide-react"
+import { ShopeeCalculator } from "@/components/shopee-calculator"
 
 const titles: Record<View, { title: string; subtitle: string }> = {
   painel: {
@@ -70,18 +70,7 @@ export default function Page() {
 
           {view === "vendas" && <SalesTable sales={sales} />}
 
-          {view === "calculadora" && (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center">
-              <span className="flex size-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Calculator className="size-6" />
-              </span>
-              <h2 className="mt-4 text-lg font-semibold tracking-tight">Calculadora de precificação</h2>
-              <p className="mt-1 max-w-md text-sm text-muted-foreground text-pretty">
-                Em breve. Aqui você vai poder simular preços de venda com base no custo,
-                nas taxas da Shopee e na margem de lucro desejada.
-              </p>
-            </div>
-          )}
+          {view === "calculadora" && <ShopeeCalculator />}
         </main>
       </div>
     </div>

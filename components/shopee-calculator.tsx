@@ -8,6 +8,14 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
@@ -20,7 +28,19 @@ import {
   SHOPEE_PERCENT,
   type ExtraCost,
 } from "@/lib/calculations"
-import { Plus, Trash2, Package, Megaphone, Truck, TrendingUp, PieChartIcon, RotateCcw } from "lucide-react"
+import { addProduct } from "@/lib/store"
+import {
+  Plus,
+  Trash2,
+  Package,
+  Megaphone,
+  Truck,
+  TrendingUp,
+  PieChartIcon,
+  RotateCcw,
+  PackagePlus,
+  Check,
+} from "lucide-react"
 
 const chartConfig = {
   custo: { label: "Custo do produto", color: "#64748b" },
@@ -49,6 +69,12 @@ export function ShopeeCalculator() {
   const [extras, setExtras] = useState<ExtraCost[]>([])
   const [adjust, setAdjust] = useState(0)
 
+  // Cadastro no estoque a partir da simulação atual.
+  const [registerOpen, setRegisterOpen] = useState(false)
+  const [productName, setProductName] = useState("")
+  const [quantity, setQuantity] = useState(1)
+  const [justSaved, setJustSaved] = useState(false)
+
   // O slider varia o preço de venda digitado de -50% a +50% para simular margens.
   const effectiveSale = salePrice > 0 ? salePrice * (1 + adjust / 100) : 0
 
@@ -71,6 +97,24 @@ export function ShopeeCalculator() {
 
   function removeExtra(id: string) {
     setExtras((prev) => prev.filter((e) => e.id !== id))
+  }
+
+  function handleRegister() {
+    const name = productName.trim()
+    if (!name || quantity <= 0) return
+    // Salva o custo do estoque como o investimento do bolso (produto + custos adicionais),
+    // e o preço de venda como o preço simulado atual.
+    addProduct({
+      name,
+      costPrice: result.investment,
+      salePrice: effectiveSale,
+      quantity,
+    })
+    setRegisterOpen(false)
+    setProductName("")
+    setQuantity(1)
+    setJustSaved(true)
+    setTimeout(() => setJustSaved(false), 2500)
   }
 
   const profitPositive = result.netProfit >= 0
@@ -354,7 +398,7 @@ export function ShopeeCalculator() {
                 </p>
               </div>
               <div className="rounded-lg bg-background p-3">
-                <p className="text-xs text-muted-foreground">ROI (sobre o custo)</p>
+                <p className="text-xs text-muted-foreground">ROI (sobre o investimento)</p>
                 <p
                   className={`mt-0.5 text-lg font-semibold ${profitPositive ? "text-[var(--color-profit)]" : "text-destructive"}`}
                 >
@@ -389,8 +433,83 @@ export function ShopeeCalculator() {
               highlight={profitPositive ? "profit" : "loss"}
             />
           </dl>
+
+          <div className="border-t p-4">
+            <Button
+              type="button"
+              className="w-full gap-2"
+              disabled={!hasData}
+              onClick={() => setRegisterOpen(true)}
+            >
+              {justSaved ? (
+                <>
+                  <Check className="size-4" /> Cadastrado no estoque
+                </>
+              ) : (
+                <>
+                  <PackagePlus className="size-4" /> Cadastrar no estoque
+                </>
+              )}
+            </Button>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              Salva este produto com o preço simulado atual.
+            </p>
+          </div>
         </div>
       </aside>
+
+      <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cadastrar no estoque</DialogTitle>
+            <DialogDescription>
+              O produto será salvo com o custo e o preço de venda desta simulação.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="register-name">Nome do produto</Label>
+              <Input
+                id="register-name"
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                placeholder="Ex.: Fone Bluetooth"
+                autoFocus
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="register-qty">Quantidade em estoque</Label>
+              <Input
+                id="register-qty"
+                type="number"
+                min={1}
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Math.floor(Number(e.target.value) || 0)))}
+              />
+            </div>
+
+            <dl className="flex flex-col divide-y rounded-lg border text-sm">
+              <Row label="Custo (produto + adicionais)" value={formatBRL(result.investment)} muted />
+              <Row label="Preço de venda" value={formatBRL(effectiveSale)} muted />
+              <Row
+                label="Lucro líquido / un."
+                value={formatBRL(result.netProfit)}
+                highlight={profitPositive ? "profit" : "loss"}
+              />
+            </dl>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setRegisterOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleRegister} disabled={!productName.trim() || quantity <= 0}>
+              Cadastrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -69,11 +69,11 @@ export function RegisterSaleDialog() {
         if (!o) reset()
       }}
     >
-      <DialogTrigger asChild>
-        <Button variant="secondary" className="shadow-sm" disabled={!hasStock}>
-          <ShoppingCart className="size-4" />
-          Registrar venda
-        </Button>
+      <DialogTrigger
+        render={<Button variant="secondary" className="shadow-sm" disabled={!hasStock} />}
+      >
+        <ShoppingCart className="size-4" />
+        Registrar venda
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

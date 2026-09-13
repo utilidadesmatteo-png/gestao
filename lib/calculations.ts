@@ -56,6 +56,7 @@ export type CalculatorResult = {
   fixedFee: number
   shopeeFee: number
   extrasTotal: number
+  investment: number
   totalCost: number
   netProfit: number
   margin: number
@@ -67,7 +68,8 @@ export type CalculatorResult = {
  * Comissão = 20% sobre o preço de venda. Taxa fixa = R$4 por item.
  * Custo total = custo + embalagem + ads + frete + extras + taxa Shopee.
  * Lucro líquido = preço de venda - custo total.
- * Margem = lucro líquido / preço de venda. ROI = lucro líquido / custo total.
+ * Margem = lucro líquido / preço de venda.
+ * ROI = lucro líquido / investimento do bolso (custo + extras, SEM taxas da Shopee).
  */
 export function computeCalculator(input: CalculatorInput): CalculatorResult {
   const commission = input.salePrice * SHOPEE_PERCENT
@@ -75,18 +77,22 @@ export function computeCalculator(input: CalculatorInput): CalculatorResult {
   const shopeeFee = commission + fixedFee
   const extrasTotal = input.extras.reduce((acc, e) => acc + e.value, 0)
 
-  const totalCost =
-    input.costPrice + input.packaging + input.ads + input.freight + extrasTotal + shopeeFee
+  // Investimento do bolso: o que o usuário realmente desembolsa (custo + custos adicionais).
+  // As taxas da Shopee NÃO entram aqui — são descontadas da venda, não pagas antecipadamente.
+  const investment = input.costPrice + input.packaging + input.ads + input.freight + extrasTotal
+
+  const totalCost = investment + shopeeFee
 
   const netProfit = input.salePrice - totalCost
   const margin = input.salePrice > 0 ? (netProfit / input.salePrice) * 100 : 0
-  const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0
+  const roi = investment > 0 ? (netProfit / investment) * 100 : 0
 
   return {
     commission,
     fixedFee,
     shopeeFee,
     extrasTotal,
+    investment,
     totalCost,
     netProfit,
     margin,

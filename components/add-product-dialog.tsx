@@ -59,11 +59,9 @@ export function AddProductDialog() {
         if (!o) reset()
       }}
     >
-      <DialogTrigger asChild>
-        <Button className="shadow-sm">
-          <Plus className="size-4" />
-          Adicionar produto
-        </Button>
+      <DialogTrigger render={<Button className="shadow-sm" />}>
+        <Plus className="size-4" />
+        Adicionar produto
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

@@ -7,6 +7,7 @@ import { StatCards } from "@/components/stat-cards"
 import { AddProductDialog } from "@/components/add-product-dialog"
 import { RegisterSaleDialog } from "@/components/register-sale-dialog"
 import { ProductsTable } from "@/components/products-table"
+import { LowStockPanel } from "@/components/low-stock-panel"
 import { SalesTable } from "@/components/sales-table"
 import { AppSidebar, type View } from "@/components/app-sidebar"
 import { ShopeeCalculator } from "@/components/shopee-calculator"
@@ -63,6 +64,7 @@ export default function Page() {
                 <span className="text-muted-foreground">{feeLabel}</span>
               </div>
               <StatCards summary={summary} />
+              <LowStockPanel items={summary.lowStock} />
             </div>
           )}
 

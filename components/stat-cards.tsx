@@ -9,6 +9,7 @@ import {
   Trophy,
   Receipt,
   Banknote,
+  Crown,
 } from "lucide-react"
 
 type Tone = "brand" | "neutral" | "success" | "destructive"
@@ -91,6 +92,17 @@ export function StatCards({ summary }: { summary: Summary }) {
         }
         icon={<Trophy className="size-5" />}
         tone="brand"
+      />
+      <StatCard
+        title="Produto mais lucrativo"
+        value={summary.mostProfitable ? summary.mostProfitable.name : "—"}
+        hint={
+          summary.mostProfitable
+            ? `${formatBRL(summary.mostProfitable.unitProfit)} de lucro por unidade`
+            : "Cadastre produtos para ver"
+        }
+        icon={<Crown className="size-5" />}
+        tone="success"
       />
       <StatCard
         title="Faturamento potencial"

@@ -100,6 +100,8 @@ export function computeCalculator(input: CalculatorInput): CalculatorResult {
   }
 }
 
+export const LOW_STOCK_THRESHOLD = 5
+
 export type Summary = {
   productCount: number
   totalUnits: number
@@ -109,6 +111,8 @@ export type Summary = {
   potentialProfit: number
   realProfit: number
   topProduct: { name: string; unitsSold: number } | null
+  mostProfitable: { name: string; unitProfit: number; margin: number } | null
+  lowStock: { id: string; name: string; quantity: number }[]
 }
 
 export function computeSummary(products: Product[], sales: Sale[]): Summary {
@@ -147,6 +151,25 @@ export function computeSummary(products: Product[], sales: Sale[]): Summary {
     }
   }
 
+  // Produto mais lucrativo: maior lucro líquido por unidade entre os cadastrados.
+  let mostProfitable: Summary["mostProfitable"] = null
+  for (const p of products) {
+    const profit = unitProfit(p.costPrice, p.salePrice)
+    if (!mostProfitable || profit > mostProfitable.unitProfit) {
+      mostProfitable = {
+        name: p.name,
+        unitProfit: profit,
+        margin: profitMargin(p.costPrice, p.salePrice),
+      }
+    }
+  }
+
+  // Estoque baixo: produtos com quantidade no ou abaixo do limite, do menor para o maior.
+  const lowStock = products
+    .filter((p) => p.quantity <= LOW_STOCK_THRESHOLD)
+    .sort((a, b) => a.quantity - b.quantity)
+    .map((p) => ({ id: p.id, name: p.name, quantity: p.quantity }))
+
   return {
     productCount,
     totalUnits,
@@ -156,5 +179,7 @@ export function computeSummary(products: Product[], sales: Sale[]): Summary {
     potentialProfit,
     realProfit,
     topProduct,
+    mostProfitable,
+    lowStock,
   }
 }

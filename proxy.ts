@@ -1,12 +1,27 @@
-import { type NextRequest } from "next/server"
-import { updateSession } from "@/lib/supabase/proxy"
+import { type NextRequest, NextResponse } from "next/server"
 
-export async function proxy(request: NextRequest) {
-  // Renova a sessão do Supabase e protege as rotas.
-  return await updateSession(request)
+const COOKIE = "estoque_auth"
+
+export function proxy(request: NextRequest) {
+  const authed = request.cookies.get(COOKIE)?.value === "ok"
+  const { pathname } = request.nextUrl
+  const isLogin = pathname === "/login"
+
+  if (!authed && !isLogin) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/login"
+    return NextResponse.redirect(url)
+  }
+
+  if (authed && isLogin) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/"
+    return NextResponse.redirect(url)
+  }
+
+  return NextResponse.next()
 }
 
 export const config = {
-  // Protege todas as rotas, exceto assets estáticos e arquivos internos do Next.
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
 }

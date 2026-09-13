@@ -1,47 +1,60 @@
+"use client"
+
+import { useStore } from "@/lib/store"
+import { computeSummary, SHOPEE_FIXED, SHOPEE_PERCENT } from "@/lib/calculations"
+import { StatCards } from "@/components/stat-cards"
+import { AddProductDialog } from "@/components/add-product-dialog"
+import { RegisterSaleDialog } from "@/components/register-sale-dialog"
+import { ProductsTable } from "@/components/products-table"
+import { SalesTable } from "@/components/sales-table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Store } from "lucide-react"
+
 export default function Page() {
+  const { products, sales } = useStore()
+  const summary = computeSummary(products, sales)
+
   return (
-    <main
-      style={{
-        colorScheme: 'light dark',
-        position: 'relative',
-        display: 'flex',
-        minHeight: '100vh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'light-dark(#fff, #000)',
-        color: 'light-dark(#000, #fff)',
-      }}
-    >
-      <svg
-        aria-hidden="true"
-        style={{ width: 80, height: 80 }}
-        width={80}
-        height={80}
-        fill="none"
-        viewBox="0 0 20 20"
-        xmlns="http://www.w3.org/2000/svg"
-        stroke="currentColor"
-        strokeWidth="0.5"
-      >
-        <path
-          d="M14.2 14.2H17V6.9375C17 4.76288 15.2371 3 13.0625 3H5.8V5.8M14.2 14.2V7.79063L7.79062 14.2H14.2ZM14.2 14.2V17H6.9375C4.76288 17 3 15.2371 3 13.0625V5.8H5.8M5.8 5.8V12.2313L12.2313 5.8H5.8Z"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <p
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: 'calc(50% + 56px)',
-          transform: 'translateX(-50%)',
-          whiteSpace: 'nowrap',
-          fontSize: '14px',
-          fontWeight: 500,
-          color: 'light-dark(#71717a, #a1a1aa)',
-        }}
-      >
-        Your v0 generation will show here.
-      </p>
+    <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Store className="size-6" />
+          </span>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-balance">
+              Controle de Estoque Shopee
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground text-pretty">
+              Taxa aplicada: {SHOPEE_PERCENT * 100}% sobre o custo + {"R$"}
+              {SHOPEE_FIXED.toFixed(2).replace(".", ",")} fixo por item.
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <RegisterSaleDialog />
+          <AddProductDialog />
+        </div>
+      </header>
+
+      <section className="mt-8" aria-label="Resumo do estoque">
+        <StatCards summary={summary} />
+      </section>
+
+      <section className="mt-8">
+        <Tabs defaultValue="products">
+          <TabsList>
+            <TabsTrigger value="products">Estoque ({products.length})</TabsTrigger>
+            <TabsTrigger value="sales">Vendas ({sales.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="products" className="mt-4">
+            <ProductsTable products={products} />
+          </TabsContent>
+          <TabsContent value="sales" className="mt-4">
+            <SalesTable sales={sales} />
+          </TabsContent>
+        </Tabs>
+      </section>
     </main>
   )
 }

@@ -1,14 +1,8 @@
 "use client"
 
-import { forwardRef } from "react"
+import { forwardRef, useEffect, useState } from "react"
 import { Input } from "@/components/ui/input"
-
-function formatFromCents(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
-}
+import { cn } from "@/lib/utils"
 
 type CurrencyInputProps = {
   value: number | null
@@ -19,22 +13,73 @@ type CurrencyInputProps = {
   className?: string
 }
 
+function formatBRLNumber(value: number): string {
+  return value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
 /**
- * Campo de moeda em Real. O usuário digita apenas os números e a vírgula
- * dos centavos aparece sozinha (digitar 1 2 3 4 5 vira "123,45").
+ * Converte o texto digitado pelo usuário em número.
+ * Aceita os formatos comuns: "51,30", "51.30", "5.130,58", "5130.58".
+ * Regra: se houver vírgula E ponto, o último símbolo é o separador decimal
+ * e o outro é separador de milhar. Se houver só um, ele é o decimal.
+ */
+function parseInput(text: string): number | null {
+  const cleaned = text.replace(/[^\d.,]/g, "")
+  if (cleaned === "") return null
+
+  const hasComma = cleaned.includes(",")
+  const hasDot = cleaned.includes(".")
+
+  let normalized: string
+  if (hasComma && hasDot) {
+    // O separador decimal é o que aparece por último.
+    const decimalSep = cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".") ? "," : "."
+    const thousandSep = decimalSep === "," ? "." : ","
+    normalized = cleaned.split(thousandSep).join("").replace(decimalSep, ".")
+  } else if (hasComma) {
+    normalized = cleaned.replace(",", ".")
+  } else {
+    normalized = cleaned
+  }
+
+  const num = Number.parseFloat(normalized)
+  return Number.isFinite(num) ? num : null
+}
+
+/**
+ * Campo de moeda em Real. O usuário digita o preço normalmente
+ * (ex.: 51,30) e o valor é formatado ao sair do campo.
  */
 export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
-  function CurrencyInput({ value, onValueChange, ...props }, ref) {
-    const display = value === null ? "" : formatFromCents(Math.round(value * 100))
+  function CurrencyInput({ value, onValueChange, className, ...props }, ref) {
+    const [text, setText] = useState(value === null ? "" : formatBRLNumber(value))
+    const [focused, setFocused] = useState(false)
+
+    // Mantém o texto em sincronia quando o valor muda por fora (reset, etc.)
+    // sem atrapalhar a digitação enquanto o campo está em foco.
+    useEffect(() => {
+      if (!focused) {
+        setText(value === null ? "" : formatBRLNumber(value))
+      }
+    }, [value, focused])
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-      const digits = e.target.value.replace(/\D/g, "")
-      if (digits === "") {
-        onValueChange(null)
-        return
-      }
-      const cents = Number.parseInt(digits, 10)
-      onValueChange(cents / 100)
+      const raw = e.target.value
+      setText(raw)
+      onValueChange(parseInput(raw))
+    }
+
+    function handleFocus() {
+      setFocused(true)
+    }
+
+    function handleBlur() {
+      setFocused(false)
+      const parsed = parseInput(text)
+      setText(parsed === null ? "" : formatBRLNumber(parsed))
     }
 
     return (
@@ -44,10 +89,12 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
         </span>
         <Input
           ref={ref}
-          inputMode="numeric"
-          value={display}
+          inputMode="decimal"
+          value={text}
           onChange={handleChange}
-          className="pl-9 tabular-nums"
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          className={cn("pl-9 tabular-nums", className)}
           {...props}
         />
       </div>

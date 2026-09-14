@@ -11,6 +11,9 @@ type CurrencyInputProps = {
   placeholder?: string
   autoFocus?: boolean
   className?: string
+  // Quando true, a vírgula é posicionada sozinha enquanto o usuário digita
+  // (estilo caixa registradora): "150" vira "1,50", "2313" vira "23,13".
+  autoDecimal?: boolean
 }
 
 function formatBRLNumber(value: number): string {
@@ -54,20 +57,35 @@ function parseInput(text: string): number | null {
  * (ex.: 51,30) e o valor é formatado ao sair do campo.
  */
 export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
-  function CurrencyInput({ value, onValueChange, className, ...props }, ref) {
+  function CurrencyInput({ value, onValueChange, className, autoDecimal, ...props }, ref) {
     const [text, setText] = useState(value === null ? "" : formatBRLNumber(value))
     const [focused, setFocused] = useState(false)
 
     // Mantém o texto em sincronia quando o valor muda por fora (reset, etc.)
     // sem atrapalhar a digitação enquanto o campo está em foco.
     useEffect(() => {
-      if (!focused) {
+      if (!focused || autoDecimal) {
         setText(value === null ? "" : formatBRLNumber(value))
       }
-    }, [value, focused])
+    }, [value, focused, autoDecimal])
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
       const raw = e.target.value
+
+      // Modo caixa registradora: só contam os dígitos; a vírgula vai sozinha.
+      if (autoDecimal) {
+        const digits = raw.replace(/\D/g, "")
+        if (digits === "") {
+          setText("")
+          onValueChange(null)
+          return
+        }
+        const num = Number.parseInt(digits, 10) / 100
+        setText(formatBRLNumber(num))
+        onValueChange(num)
+        return
+      }
+
       setText(raw)
       onValueChange(parseInput(raw))
     }
@@ -78,6 +96,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
 
     function handleBlur() {
       setFocused(false)
+      if (autoDecimal) return
       const parsed = parseInput(text)
       setText(parsed === null ? "" : formatBRLNumber(parsed))
     }

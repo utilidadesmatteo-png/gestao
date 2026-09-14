@@ -12,9 +12,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Trash2, Check, X } from "lucide-react"
+import { CurrencyInput } from "@/components/currency-input"
+import { Plus, Trash2, Check, X, Pencil } from "lucide-react"
 import type { Product } from "@/lib/types"
-import { addStock, removeProduct } from "@/lib/store"
+import { addStock, removeProduct, updateProduct } from "@/lib/store"
 import { formatBRL, formatPercent, unitProfit, profitMargin } from "@/lib/calculations"
 
 function AddStockCell({ product }: { product: Product }) {
@@ -71,6 +72,158 @@ function marginTone(margin: number): string {
   return "border-transparent bg-success/10 text-success"
 }
 
+function EditableRow({ product, onCancel }: { product: Product; onCancel: () => void }) {
+  const [name, setName] = useState(product.name)
+  const [costPrice, setCostPrice] = useState<number | null>(product.costPrice)
+  const [salePrice, setSalePrice] = useState<number | null>(product.salePrice)
+  const [quantity, setQuantity] = useState(String(product.quantity))
+  const [saving, setSaving] = useState(false)
+
+  const cost = costPrice ?? 0
+  const sale = salePrice ?? 0
+  const qty = Number.parseInt(quantity, 10)
+  const profit = unitProfit(cost, sale)
+  const margin = profitMargin(cost, sale)
+
+  const valid = name.trim().length > 0 && sale > 0 && Number.isInteger(qty) && qty >= 0
+
+  async function save() {
+    if (!valid) return
+    setSaving(true)
+    const res = await updateProduct(product.id, {
+      name: name.trim(),
+      costPrice: cost,
+      salePrice: sale,
+      quantity: qty,
+    })
+    setSaving(false)
+    if (res.ok) onCancel()
+  }
+
+  return (
+    <TableRow className="bg-muted/30">
+      <TableCell>
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="h-9"
+          placeholder="Nome do produto"
+          autoFocus
+        />
+      </TableCell>
+      <TableCell>
+        <CurrencyInput value={costPrice} onValueChange={setCostPrice} autoDecimal className="h-9 w-28" />
+      </TableCell>
+      <TableCell>
+        <CurrencyInput value={salePrice} onValueChange={setSalePrice} autoDecimal className="h-9 w-28" />
+      </TableCell>
+      <TableCell
+        className={`text-right tabular-nums font-semibold ${profit >= 0 ? "text-success" : "text-destructive"}`}
+      >
+        {formatBRL(profit)}
+      </TableCell>
+      <TableCell className="text-center">
+        <span
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums ${marginTone(margin)}`}
+        >
+          {formatPercent(margin)}
+        </span>
+      </TableCell>
+      <TableCell className="text-center">
+        <Input
+          type="number"
+          min="0"
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          className="mx-auto h-9 w-20 text-center"
+        />
+      </TableCell>
+      <TableCell className="text-right tabular-nums text-muted-foreground">
+        {formatBRL(cost * (Number.isInteger(qty) ? qty : 0))}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-success"
+            onClick={save}
+            disabled={!valid || saving}
+          >
+            <Check className="size-4" />
+            <span className="sr-only">Salvar alterações</span>
+          </Button>
+          <Button variant="ghost" size="icon" className="size-8" onClick={onCancel} disabled={saving}>
+            <X className="size-4" />
+            <span className="sr-only">Cancelar edição</span>
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+function ProductRow({ product }: { product: Product }) {
+  const [editing, setEditing] = useState(false)
+
+  if (editing) {
+    return <EditableRow product={product} onCancel={() => setEditing(false)} />
+  }
+
+  const profit = unitProfit(product.costPrice, product.salePrice)
+  const margin = profitMargin(product.costPrice, product.salePrice)
+  const invested = product.costPrice * product.quantity
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">{product.name}</TableCell>
+      <TableCell className="text-right tabular-nums text-muted-foreground">
+        {formatBRL(product.costPrice)}
+      </TableCell>
+      <TableCell className="text-right tabular-nums">{formatBRL(product.salePrice)}</TableCell>
+      <TableCell
+        className={`text-right tabular-nums font-semibold ${profit >= 0 ? "text-success" : "text-destructive"}`}
+      >
+        {formatBRL(profit)}
+      </TableCell>
+      <TableCell className="text-center">
+        <span
+          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums ${marginTone(margin)}`}
+        >
+          {formatPercent(margin)}
+        </span>
+      </TableCell>
+      <TableCell className="text-center">
+        <Badge variant={product.quantity > 0 ? "secondary" : "outline"}>{product.quantity} un.</Badge>
+      </TableCell>
+      <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(invested)}</TableCell>
+      <TableCell>
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-foreground"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="size-4" />
+            <span className="sr-only">Editar produto</span>
+          </Button>
+          <AddStockCell product={product} />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-destructive"
+            onClick={() => removeProduct(product.id)}
+          >
+            <Trash2 className="size-4" />
+            <span className="sr-only">Excluir produto</span>
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+}
+
 export function ProductsTable({ products }: { products: Product[] }) {
   if (products.length === 0) {
     return (
@@ -96,54 +249,9 @@ export function ProductsTable({ products }: { products: Product[] }) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {products.map((p) => {
-            const profit = unitProfit(p.costPrice, p.salePrice)
-            const margin = profitMargin(p.costPrice, p.salePrice)
-            const invested = p.costPrice * p.quantity
-            return (
-              <TableRow key={p.id}>
-                <TableCell className="font-medium">{p.name}</TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {formatBRL(p.costPrice)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{formatBRL(p.salePrice)}</TableCell>
-                <TableCell
-                  className={`text-right tabular-nums font-semibold ${profit >= 0 ? "text-success" : "text-destructive"}`}
-                >
-                  {formatBRL(profit)}
-                </TableCell>
-                <TableCell className="text-center">
-                  <span
-                    className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold tabular-nums ${marginTone(margin)}`}
-                  >
-                    {formatPercent(margin)}
-                  </span>
-                </TableCell>
-                <TableCell className="text-center">
-                  <Badge variant={p.quantity > 0 ? "secondary" : "outline"}>
-                    {p.quantity} un.
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">
-                  {formatBRL(invested)}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end gap-1">
-                    <AddStockCell product={p} />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeProduct(p.id)}
-                    >
-                      <Trash2 className="size-4" />
-                      <span className="sr-only">Excluir produto</span>
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )
-          })}
+          {products.map((p) => (
+            <ProductRow key={p.id} product={p} />
+          ))}
         </TableBody>
       </Table>
     </div>

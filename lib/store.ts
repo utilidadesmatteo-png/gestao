@@ -118,6 +118,29 @@ export async function addProduct(input: {
   return { ok: true }
 }
 
+export async function updateProduct(
+  productId: string,
+  patch: { name?: string; costPrice?: number; salePrice?: number; quantity?: number },
+): Promise<Result> {
+  const supabase = createClient()
+
+  const row: Record<string, unknown> = {}
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.costPrice !== undefined) row.cost_price = patch.costPrice
+  if (patch.salePrice !== undefined) row.sale_price = patch.salePrice
+  if (patch.quantity !== undefined) row.quantity = patch.quantity
+
+  const { error } = await supabase.from("products").update(row).eq("id", productId)
+
+  if (error) {
+    console.log("[v0] updateProduct error:", error.message)
+    return { ok: false, error: "Não foi possível salvar as alterações." }
+  }
+
+  await refresh()
+  return { ok: true }
+}
+
 export async function addStock(productId: string, amount: number): Promise<Result> {
   const supabase = createClient()
   const product = snapshot.products.find((p) => p.id === productId)

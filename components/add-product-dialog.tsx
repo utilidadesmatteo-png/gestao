@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label"
 import { CurrencyInput } from "@/components/currency-input"
 import { Plus, Trash2, Package, Megaphone, Truck } from "lucide-react"
 import { addProduct } from "@/lib/store"
-import { formatBRL, formatPercent, unitProfit, profitMargin } from "@/lib/calculations"
+import { formatBRL, formatPercent, unitProfit, profitMargin, shopeeFee } from "@/lib/calculations"
 
 // Custo extra em edição: o valor pode ficar vazio (null) enquanto o usuário digita.
 type EditableExtra = { id: string; label: string; value: number | null }
@@ -40,9 +40,14 @@ export function AddProductDialog() {
 
   const extrasTotal = extras.reduce((acc, e) => acc + (e.value ?? 0), 0)
   const hasValues = cost !== null && sale !== null
-  const totalCost = hasValues ? cost + extrasTotal : null
-  const profit = totalCost !== null && sale !== null ? unitProfit(totalCost, sale) : null
-  const margin = totalCost !== null && sale !== null ? profitMargin(totalCost, sale) : null
+  // Investimento do bolso por unidade: preço de custo + custos adicionais.
+  const investment = hasValues ? cost + extrasTotal : null
+  // Taxa da Shopee (20% da venda + R$4 fixo), mostrada separadamente.
+  const fee = sale !== null ? shopeeFee(sale) : null
+  // Custo total = investimento + taxa da Shopee.
+  const totalCost = investment !== null && fee !== null ? investment + fee : null
+  const profit = investment !== null && sale !== null ? unitProfit(investment, sale) : null
+  const margin = investment !== null && sale !== null ? profitMargin(investment, sale) : null
 
   function addExtra(label = "") {
     setExtras((prev) => [...prev, { id: crypto.randomUUID(), label, value: null }])
@@ -210,22 +215,34 @@ export function AddProductDialog() {
             />
           </div>
 
-          {hasValues && totalCost !== null && profit !== null && margin !== null ? (
+          {hasValues && totalCost !== null && fee !== null && profit !== null && margin !== null ? (
             <div className="rounded-lg border bg-muted/40 p-3 text-sm">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Resumo por unidade (com taxa Shopee)
+                Resumo por unidade
               </p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Custo total</span>
-                  <span className="font-medium">{formatBRL(totalCost)}</span>
+                  <span className="text-muted-foreground">Preço de custo</span>
+                  <span className="font-medium">{formatBRL(cost!)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Venda</span>
+                  <span className="text-muted-foreground">Custos adicionais</span>
+                  <span className="font-medium">{formatBRL(extrasTotal)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Taxa Shopee (20% + R$ 4,00)</span>
+                  <span className="font-medium text-destructive">{formatBRL(fee)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t pt-2">
+                  <span className="text-muted-foreground">Custo total</span>
+                  <span className="font-semibold">{formatBRL(totalCost)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Preço de venda</span>
                   <span className="font-medium">{formatBRL(sale!)}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Lucro</span>
+                <div className="flex items-center justify-between border-t pt-2">
+                  <span className="text-muted-foreground">Lucro líquido</span>
                   <span className={profit >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
                     {formatBRL(profit)}
                   </span>

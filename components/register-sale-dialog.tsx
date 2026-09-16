@@ -24,14 +24,16 @@ export function RegisterSaleDialog() {
   const [open, setOpen] = useState(false)
   const [productId, setProductId] = useState("")
   const [price, setPrice] = useState<number | null>(null)
-  const [quantity, setQuantity] = useState(1)
+  const [qtyText, setQtyText] = useState("1")
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
   const selected = products.find((p) => p.id === productId)
   const maxQty = selected?.quantity ?? 0
+  const quantity = Number.parseInt(qtyText, 10)
+  const qtyValid = Number.isInteger(quantity) && quantity >= 1 && quantity <= maxQty
   const preview =
-    selected && price !== null ? unitProfit(selected.costPrice, price) * quantity : null
+    selected && price !== null && qtyValid ? unitProfit(selected.costPrice, price) * quantity : null
 
   const hasStock = products.some((p) => p.quantity > 0)
   const available = products.filter((p) => p.quantity > 0)
@@ -39,7 +41,7 @@ export function RegisterSaleDialog() {
   function reset() {
     setProductId("")
     setPrice(null)
-    setQuantity(1)
+    setQtyText("1")
     setError("")
   }
 
@@ -49,21 +51,21 @@ export function RegisterSaleDialog() {
     const p = products.find((x) => x.id === id)
     if (p) {
       setPrice(p.salePrice)
-      setQuantity(1)
+      setQtyText("1")
     }
   }
 
   function changeQty(next: number) {
-    if (Number.isNaN(next)) return setQuantity(1)
-    const clamped = Math.max(1, Math.min(next, maxQty || 1))
-    setQuantity(clamped)
+    const base = Number.isFinite(next) ? next : 1
+    const clamped = Math.max(1, Math.min(base, maxQty || 1))
+    setQtyText(String(clamped))
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!selected) return setError("Selecione um produto.")
     if (price === null || price < 0) return setError("Preço de venda inválido.")
-    if (!Number.isInteger(quantity) || quantity <= 0) return setError("Quantidade inválida.")
+    if (!qtyValid) return setError("Quantidade inválida.")
 
     setSaving(true)
     const result = await registerSale({ productId, salePrice: price, quantity })
@@ -154,8 +156,8 @@ export function RegisterSaleDialog() {
                     variant="outline"
                     size="icon"
                     className="size-9 shrink-0"
-                    onClick={() => changeQty(quantity - 1)}
-                    disabled={quantity <= 1}
+                    onClick={() => changeQty((qtyValid ? quantity : 1) - 1)}
+                    disabled={!qtyValid || quantity <= 1}
                     aria-label="Diminuir quantidade"
                   >
                     <Minus className="size-4" />
@@ -168,16 +170,17 @@ export function RegisterSaleDialog() {
                     max={maxQty}
                     inputMode="numeric"
                     className="text-center"
-                    value={quantity}
-                    onChange={(e) => changeQty(Number.parseInt(e.target.value, 10))}
+                    value={qtyText}
+                    onChange={(e) => setQtyText(e.target.value)}
+                    onBlur={() => changeQty(Number.parseInt(qtyText, 10))}
                   />
                   <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="size-9 shrink-0"
-                    onClick={() => changeQty(quantity + 1)}
-                    disabled={quantity >= maxQty}
+                    onClick={() => changeQty((qtyValid ? quantity : 0) + 1)}
+                    disabled={qtyValid && quantity >= maxQty}
                     aria-label="Aumentar quantidade"
                   >
                     <Plus className="size-4" />
@@ -187,7 +190,7 @@ export function RegisterSaleDialog() {
             </div>
           ) : null}
 
-          {selected && price !== null ? (
+          {selected && price !== null && qtyValid ? (
             <div className="grid gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Total da venda</span>

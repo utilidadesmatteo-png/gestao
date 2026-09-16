@@ -11,9 +11,6 @@ type CurrencyInputProps = {
   placeholder?: string
   autoFocus?: boolean
   className?: string
-  // Quando true, a vírgula é posicionada sozinha enquanto o usuário digita
-  // (estilo caixa registradora): "150" vira "1,50", "2313" vira "23,13".
-  autoDecimal?: boolean
 }
 
 function formatBRLNumber(value: number): string {
@@ -24,81 +21,37 @@ function formatBRLNumber(value: number): string {
 }
 
 /**
- * Converte o texto digitado pelo usuário em número.
- * Aceita os formatos comuns: "51,30", "51.30", "5.130,58", "5130.58".
- * Regra: se houver vírgula E ponto, o último símbolo é o separador decimal
- * e o outro é separador de milhar. Se houver só um, ele é o decimal.
- */
-function parseInput(text: string): number | null {
-  const cleaned = text.replace(/[^\d.,]/g, "")
-  if (cleaned === "") return null
-
-  const hasComma = cleaned.includes(",")
-  const hasDot = cleaned.includes(".")
-
-  let normalized: string
-  if (hasComma && hasDot) {
-    // O separador decimal é o que aparece por último.
-    const decimalSep = cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".") ? "," : "."
-    const thousandSep = decimalSep === "," ? "." : ","
-    normalized = cleaned.split(thousandSep).join("").replace(decimalSep, ".")
-  } else if (hasComma) {
-    normalized = cleaned.replace(",", ".")
-  } else {
-    normalized = cleaned
-  }
-
-  const num = Number.parseFloat(normalized)
-  return Number.isFinite(num) ? num : null
-}
-
-/**
- * Campo de moeda em Real. O usuário digita o preço normalmente
- * (ex.: 51,30) e o valor é formatado ao sair do campo.
+ * Campo de moeda em Real no estilo "caixa registradora": a vírgula é
+ * posicionada sozinha enquanto o usuário digita apenas os números.
+ * Ex.: "150" vira "1,50", "2313" vira "23,13".
+ *
+ * Apagar todos os dígitos deixa o campo vazio e o valor vira null —
+ * nunca gera NaN nem quebra os cálculos.
  */
 export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
-  function CurrencyInput({ value, onValueChange, className, autoDecimal, ...props }, ref) {
+  function CurrencyInput({ value, onValueChange, className, ...props }, ref) {
     const [text, setText] = useState(value === null ? "" : formatBRLNumber(value))
-    const [focused, setFocused] = useState(false)
 
-    // Mantém o texto em sincronia quando o valor muda por fora (reset, etc.)
-    // sem atrapalhar a digitação enquanto o campo está em foco.
+    // Mantém o texto em sincronia quando o valor muda por fora
+    // (reset do formulário, seleção de produto, etc.).
     useEffect(() => {
-      if (!focused || autoDecimal) {
-        setText(value === null ? "" : formatBRLNumber(value))
-      }
-    }, [value, focused, autoDecimal])
+      setText(value === null ? "" : formatBRLNumber(value))
+    }, [value])
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-      const raw = e.target.value
+      // Só os dígitos contam; qualquer outro caractere é ignorado.
+      const digits = e.target.value.replace(/\D/g, "")
 
-      // Modo caixa registradora: só contam os dígitos; a vírgula vai sozinha.
-      if (autoDecimal) {
-        const digits = raw.replace(/\D/g, "")
-        if (digits === "") {
-          setText("")
-          onValueChange(null)
-          return
-        }
-        const num = Number.parseInt(digits, 10) / 100
-        setText(formatBRLNumber(num))
-        onValueChange(num)
+      if (digits === "") {
+        setText("")
+        onValueChange(null)
         return
       }
 
-      setText(raw)
-      onValueChange(parseInput(raw))
-    }
-
-    function handleFocus() {
-      setFocused(true)
-    }
-
-    function handleBlur() {
-      setFocused(false)
-      if (autoDecimal) return
-      const parsed = parseInput(text)
-      setText(parsed === null ? "" : formatBRLNumber(parsed))
+      // Limita a um teto seguro para não estourar em valores absurdos.
+      const num = Number.parseInt(digits.slice(0, 12), 10) / 100
+      setText(formatBRLNumber(num))
+      onValueChange(num)
     }
 
     return (
@@ -108,11 +61,9 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
         </span>
         <Input
           ref={ref}
-          inputMode="decimal"
+          inputMode="numeric"
           value={text}
           onChange={handleChange}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
           className={cn("pl-9 tabular-nums", className)}
           {...props}
         />

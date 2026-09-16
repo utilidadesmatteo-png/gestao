@@ -130,7 +130,6 @@ export function AddProductDialog() {
                 value={cost}
                 onValueChange={setCost}
                 placeholder="0,00"
-                autoDecimal
               />
             </div>
             <div className="grid gap-2">
@@ -140,7 +139,6 @@ export function AddProductDialog() {
                 value={sale}
                 onValueChange={setSale}
                 placeholder="0,00"
-                autoDecimal
               />
             </div>
           </div>
@@ -184,7 +182,6 @@ export function AddProductDialog() {
                       onValueChange={(v) => updateExtra(extra.id, { value: v })}
                       placeholder="0,00"
                       className="w-28"
-                      autoDecimal
                     />
                     <Button
                       type="button"

@@ -112,10 +112,10 @@ function EditableRow({ product, onCancel }: { product: Product; onCancel: () => 
         />
       </TableCell>
       <TableCell>
-        <CurrencyInput value={costPrice} onValueChange={setCostPrice} autoDecimal className="h-9 w-28" />
+        <CurrencyInput value={costPrice} onValueChange={setCostPrice} className="h-9 w-28" />
       </TableCell>
       <TableCell>
-        <CurrencyInput value={salePrice} onValueChange={setSalePrice} autoDecimal className="h-9 w-28" />
+        <CurrencyInput value={salePrice} onValueChange={setSalePrice} className="h-9 w-28" />
       </TableCell>
       <TableCell
         className={`text-right tabular-nums font-semibold ${profit >= 0 ? "text-success" : "text-destructive"}`}

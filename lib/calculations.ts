@@ -26,11 +26,13 @@ export function profitMargin(costPrice: number, salePrice: number): number {
 }
 
 export function formatPercent(value: number): string {
-  return `${value.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+  const safe = Number.isFinite(value) ? value : 0
+  return `${safe.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
 }
 
 export function formatBRL(value: number): string {
-  return value.toLocaleString("pt-BR", {
+  const safe = Number.isFinite(value) ? value : 0
+  return safe.toLocaleString("pt-BR", {
     style: "currency",
     currency: "BRL",
   })
@@ -110,6 +112,9 @@ export type Summary = {
   realRevenue: number
   potentialProfit: number
   realProfit: number
+  averageMargin: number
+  averageTicket: number
+  salesCount: number
   topProduct: { name: string; unitsSold: number } | null
   mostProfitable: { name: string; unitProfit: number; margin: number } | null
   lowStock: { id: string; name: string; quantity: number }[]
@@ -133,6 +138,14 @@ export function computeSummary(products: Product[], sales: Sale[]): Summary {
     (acc, s) => acc + unitProfit(s.costPrice, s.salePrice) * s.quantity,
     0,
   )
+
+  // Margem média do estoque: quanto do faturamento potencial vira lucro, em %.
+  // Ponderada pelo valor de venda de cada produto (lucro potencial / faturamento potencial).
+  const averageMargin = potentialRevenue > 0 ? (potentialProfit / potentialRevenue) * 100 : 0
+
+  // Ticket médio: valor médio de cada venda registrada (faturamento real / nº de vendas).
+  const salesCount = sales.length
+  const averageTicket = salesCount > 0 ? realRevenue / salesCount : 0
 
   const soldByProduct = new Map<string, { name: string; unitsSold: number }>()
   for (const s of sales) {

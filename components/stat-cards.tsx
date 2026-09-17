@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card"
-import { formatBRL, type Summary } from "@/lib/calculations"
+import { formatBRL, formatPercent, type Summary } from "@/lib/calculations"
 import {
   Boxes,
   Package,
@@ -10,6 +10,8 @@ import {
   Receipt,
   Banknote,
   Crown,
+  Percent,
+  Ticket,
 } from "lucide-react"
 
 type Tone = "brand" | "neutral" | "success" | "destructive"
@@ -81,6 +83,25 @@ export function StatCards({ summary }: { summary: Summary }) {
         hint="Custo total do que está parado"
         icon={<Wallet className="size-5" />}
         tone="neutral"
+      />
+      <StatCard
+        title="Margem média do estoque"
+        value={summary.potentialRevenue > 0 ? formatPercent(summary.averageMargin) : "—"}
+        hint="Lucro médio sobre o preço de venda"
+        icon={<Percent className="size-5" />}
+        tone={summary.averageMargin >= 0 ? "success" : "destructive"}
+        valueTone={summary.averageMargin >= 0 ? "success" : "destructive"}
+      />
+      <StatCard
+        title="Ticket médio"
+        value={summary.salesCount > 0 ? formatBRL(summary.averageTicket) : "—"}
+        hint={
+          summary.salesCount > 0
+            ? `Média de ${summary.salesCount} venda(s) registrada(s)`
+            : "Nenhuma venda registrada ainda"
+        }
+        icon={<Ticket className="size-5" />}
+        tone="brand"
       />
       <StatCard
         title="Produto mais vendido"

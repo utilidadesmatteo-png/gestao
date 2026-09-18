@@ -143,9 +143,10 @@ export function computeSummary(products: Product[], sales: Sale[]): Summary {
   // Ponderada pelo valor de venda de cada produto (lucro potencial / faturamento potencial).
   const averageMargin = potentialRevenue > 0 ? (potentialProfit / potentialRevenue) * 100 : 0
 
-  // Ticket médio: valor médio de cada venda registrada (faturamento real / nº de vendas).
+  // Ticket médio do estoque: preço de venda médio por unidade em estoque
+  // (faturamento potencial / total de unidades). Baseado no estoque, não nas vendas.
   const salesCount = sales.length
-  const averageTicket = salesCount > 0 ? realRevenue / salesCount : 0
+  const averageTicket = totalUnits > 0 ? potentialRevenue / totalUnits : 0
 
   const soldByProduct = new Map<string, { name: string; unitsSold: number }>()
   for (const s of sales) {

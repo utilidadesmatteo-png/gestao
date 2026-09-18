@@ -94,12 +94,8 @@ export function StatCards({ summary }: { summary: Summary }) {
       />
       <StatCard
         title="Ticket médio"
-        value={summary.salesCount > 0 ? formatBRL(summary.averageTicket) : "—"}
-        hint={
-          summary.salesCount > 0
-            ? `Média de ${summary.salesCount} venda(s) registrada(s)`
-            : "Nenhuma venda registrada ainda"
-        }
+        value={summary.totalUnits > 0 ? formatBRL(summary.averageTicket) : "—"}
+        hint="Preço de venda médio por item em estoque"
         icon={<Ticket className="size-5" />}
         tone="brand"
       />

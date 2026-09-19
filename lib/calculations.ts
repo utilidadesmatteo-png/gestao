@@ -1,10 +1,10 @@
 import type { Product, Sale } from "./types"
 
 export const SHOPEE_PERCENT = 0.2
-export const SHOPEE_FIXED = 4
+export const SHOPEE_FIXED = 4.5
 
 /**
- * Taxa da Shopee por item: 20% sobre o PREÇO DE VENDA + R$4 fixo.
+ * Taxa da Shopee por item: 20% sobre o PREÇO DE VENDA + R$4,50 fixo.
  * Definido pelo usuário: a taxa incide sobre a venda, como no extrato real da Shopee.
  */
 export function shopeeFee(salePrice: number): number {
@@ -67,7 +67,7 @@ export type CalculatorResult = {
 
 /**
  * Calculadora de precificação Shopee.
- * Comissão = 20% sobre o preço de venda. Taxa fixa = R$4 por item.
+ * Comissão = 20% sobre o preço de venda. Taxa fixa = R$4,50 por item.
  * Custo total = custo + embalagem + ads + frete + extras + taxa Shopee.
  * Lucro líquido = preço de venda - custo total.
  * Margem = lucro líquido / preço de venda.

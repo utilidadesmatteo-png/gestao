@@ -42,7 +42,7 @@ export function AddProductDialog() {
   const hasValues = cost !== null && sale !== null
   // Investimento do bolso por unidade: preço de custo + custos adicionais.
   const investment = hasValues ? cost + extrasTotal : null
-  // Taxa da Shopee (20% da venda + R$4 fixo), mostrada separadamente.
+  // Taxa da Shopee (20% da venda + R$4,50 fixo), mostrada separadamente.
   const fee = sale !== null ? shopeeFee(sale) : null
   // Custo total = investimento + taxa da Shopee.
   const totalCost = investment !== null && fee !== null ? investment + fee : null
@@ -227,7 +227,7 @@ export function AddProductDialog() {
                   <span className="font-medium">{formatBRL(extrasTotal)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Taxa Shopee (20% + R$ 4,00)</span>
+                  <span className="text-muted-foreground">Taxa Shopee (20% + R$ 4,50)</span>
                   <span className="font-medium text-destructive">{formatBRL(fee)}</span>
                 </div>
                 <div className="flex items-center justify-between border-t pt-2">

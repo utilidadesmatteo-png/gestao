@@ -1,9 +1,15 @@
+export type ExtraCost = {
+  label: string
+  value: number
+}
+
 export type Product = {
   id: string
   name: string
   costPrice: number
   salePrice: number
   quantity: number
+  extraCosts: ExtraCost[]
   createdAt: number
 }
 

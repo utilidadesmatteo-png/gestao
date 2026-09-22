@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react"
 import { createClient } from "@/lib/supabase/client"
-import type { Product, Sale } from "./types"
+import type { ExtraCost, Product, Sale } from "./types"
 
 type StoreSnapshot = {
   products: Product[]

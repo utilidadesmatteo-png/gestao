@@ -78,6 +78,11 @@ export function AddProductDialog() {
     if (sale === null || sale < 0) return setError("Preço de venda inválido.")
     if (!Number.isInteger(q) || q < 0) return setError("Quantidade inválida.")
 
+    // Guarda o detalhamento dos custos extras (ignora os vazios/sem valor).
+    const cleanedExtras = extras
+      .filter((e) => (e.value ?? 0) > 0)
+      .map((e) => ({ label: e.label.trim() || "Custo extra", value: e.value ?? 0 }))
+
     setSaving(true)
     // O custo salvo é o investimento total por unidade: preço de custo + custos adicionais.
     const result = await addProduct({
@@ -85,6 +90,7 @@ export function AddProductDialog() {
       costPrice: cost + extrasTotal,
       salePrice: sale,
       quantity: q,
+      extraCosts: cleanedExtras,
     })
     setSaving(false)
     if (!result.ok) return setError(result.error)

@@ -24,6 +24,26 @@ function setSnapshot(patch: Partial<StoreSnapshot>) {
   emit()
 }
 
+// Lê a lista de custos extras (JSONB) de forma tolerante a dados inválidos.
+function parseExtraCosts(raw: unknown): ExtraCost[] {
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const value = Number((item as { value?: unknown }).value)
+    if (!Number.isFinite(value)) return []
+    const label = String((item as { label?: unknown }).label ?? "")
+    return [{ label, value }]
+  })
+}
+
+// Detecta o erro de "coluna extra_costs inexistente" para permitir fallback
+// enquanto a migração no banco não foi aplicada.
+function isMissingExtraCosts(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false
+  if (error.code === "PGRST204" || error.code === "42703") return true
+  return (error.message ?? "").toLowerCase().includes("extra_costs")
+}
+
 // Converte as linhas do banco (snake_case) para os tipos do app (camelCase).
 function mapProduct(row: Record<string, unknown>): Product {
   return {
@@ -32,6 +52,7 @@ function mapProduct(row: Record<string, unknown>): Product {
     costPrice: Number(row.cost_price),
     salePrice: Number(row.sale_price),
     quantity: Number(row.quantity),
+    extraCosts: parseExtraCosts(row.extra_costs),
     createdAt: row.created_at ? Date.parse(String(row.created_at)) : Date.now(),
   }
 }
@@ -99,15 +120,23 @@ export async function addProduct(input: {
   costPrice: number
   salePrice: number
   quantity: number
+  extraCosts?: ExtraCost[]
 }): Promise<Result> {
   const supabase = createClient()
 
-  const { error } = await supabase.from("products").insert({
+  const base = {
     name: input.name,
     cost_price: input.costPrice,
     sale_price: input.salePrice,
     quantity: input.quantity,
-  })
+  }
+  const extras = input.extraCosts ?? []
+
+  let { error } = await supabase.from("products").insert({ ...base, extra_costs: extras })
+  // Se a coluna extra_costs ainda não existe no banco, salva sem o detalhamento.
+  if (error && isMissingExtraCosts(error)) {
+    ;({ error } = await supabase.from("products").insert(base))
+  }
 
   if (error) {
     console.log("[v0] addProduct error:", error.message)
@@ -120,7 +149,7 @@ export async function addProduct(input: {
 
 export async function updateProduct(
   productId: string,
-  patch: { name?: string; costPrice?: number; salePrice?: number; quantity?: number },
+  patch: { name?: string; costPrice?: number; salePrice?: number; quantity?: number; extraCosts?: ExtraCost[] },
 ): Promise<Result> {
   const supabase = createClient()
 
@@ -130,7 +159,19 @@ export async function updateProduct(
   if (patch.salePrice !== undefined) row.sale_price = patch.salePrice
   if (patch.quantity !== undefined) row.quantity = patch.quantity
 
-  const { error } = await supabase.from("products").update(row).eq("id", productId)
+  let error
+  if (patch.extraCosts !== undefined) {
+    ;({ error } = await supabase
+      .from("products")
+      .update({ ...row, extra_costs: patch.extraCosts })
+      .eq("id", productId))
+    // Se a coluna extra_costs ainda não existe, salva o resto normalmente.
+    if (error && isMissingExtraCosts(error)) {
+      ;({ error } = await supabase.from("products").update(row).eq("id", productId))
+    }
+  } else {
+    ;({ error } = await supabase.from("products").update(row).eq("id", productId))
+  }
 
   if (error) {
     console.log("[v0] updateProduct error:", error.message)

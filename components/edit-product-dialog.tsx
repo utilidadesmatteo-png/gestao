@@ -13,9 +13,35 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { CurrencyInput } from "@/components/currency-input"
+import { Plus, Trash2, Package, Megaphone, Truck } from "lucide-react"
 import type { Product } from "@/lib/types"
 import { updateProduct } from "@/lib/store"
 import { formatBRL, formatPercent, unitProfit, profitMargin, shopeeFee } from "@/lib/calculations"
+
+// Custo extra em edição: o valor pode ficar vazio (null) enquanto o usuário digita.
+type EditableExtra = { id: string; label: string; value: number | null }
+
+// Atalhos de custos comuns. Ao clicar, o custo é adicionado à lista.
+const quickCosts = [
+  { label: "Embalagem", icon: Package },
+  { label: "Shopee Ads", icon: Megaphone },
+  { label: "Frete", icon: Truck },
+] as const
+
+// Soma dos custos extras já salvos no produto.
+function storedExtrasTotal(product: Product) {
+  return product.extraCosts.reduce((acc, e) => acc + e.value, 0)
+}
+
+// Custo base = investimento total salvo - custos extras salvos (arredondado em centavos).
+function baseCostOf(product: Product) {
+  const base = product.costPrice - storedExtrasTotal(product)
+  return Math.max(0, Math.round(base * 100) / 100)
+}
+
+function extrasFromProduct(product: Product): EditableExtra[] {
+  return product.extraCosts.map((e) => ({ id: crypto.randomUUID(), label: e.label, value: e.value }))
+}
 
 export function EditProductDialog({
   product,
@@ -27,26 +53,43 @@ export function EditProductDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [name, setName] = useState(product.name)
-  const [cost, setCost] = useState<number | null>(product.costPrice)
+  const [cost, setCost] = useState<number | null>(baseCostOf(product))
   const [sale, setSale] = useState<number | null>(product.salePrice)
   const [quantity, setQuantity] = useState(String(product.quantity))
+  const [extras, setExtras] = useState<EditableExtra[]>(extrasFromProduct(product))
   const [error, setError] = useState("")
   const [saving, setSaving] = useState(false)
 
   // Ao (re)abrir, reinicia os campos com os dados atuais do produto.
   function reset() {
     setName(product.name)
-    setCost(product.costPrice)
+    setCost(baseCostOf(product))
     setSale(product.salePrice)
     setQuantity(String(product.quantity))
+    setExtras(extrasFromProduct(product))
     setError("")
   }
 
+  function addExtra(label = "") {
+    setExtras((prev) => [...prev, { id: crypto.randomUUID(), label, value: null }])
+  }
+
+  function updateExtra(id: string, patch: Partial<EditableExtra>) {
+    setExtras((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
+  }
+
+  function removeExtra(id: string) {
+    setExtras((prev) => prev.filter((e) => e.id !== id))
+  }
+
+  const extrasTotal = extras.reduce((acc, e) => acc + (e.value ?? 0), 0)
   const hasValues = cost !== null && sale !== null
+  // Investimento do bolso por unidade: preço de custo + custos adicionais.
+  const investment = hasValues ? cost + extrasTotal : null
   const fee = sale !== null ? shopeeFee(sale) : null
-  const totalCost = cost !== null && fee !== null ? cost + fee : null
-  const profit = cost !== null && sale !== null ? unitProfit(cost, sale) : null
-  const margin = cost !== null && sale !== null ? profitMargin(cost, sale) : null
+  const totalCost = investment !== null && fee !== null ? investment + fee : null
+  const profit = investment !== null && sale !== null ? unitProfit(investment, sale) : null
+  const margin = investment !== null && sale !== null ? profitMargin(investment, sale) : null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -56,12 +99,18 @@ export function EditProductDialog({
     if (sale === null || sale < 0) return setError("Preço de venda inválido.")
     if (!Number.isInteger(q) || q < 0) return setError("Quantidade inválida.")
 
+    // Guarda o detalhamento e o investimento total (custo base + extras).
+    const cleanedExtras = extras
+      .filter((e) => (e.value ?? 0) > 0)
+      .map((e) => ({ label: e.label.trim() || "Custo extra", value: e.value ?? 0 }))
+
     setSaving(true)
     const result = await updateProduct(product.id, {
       name: name.trim(),
-      costPrice: cost,
+      costPrice: cost + extrasTotal,
       salePrice: sale,
       quantity: q,
+      extraCosts: cleanedExtras,
     })
     setSaving(false)
     if (!result.ok) return setError(result.error)
@@ -79,7 +128,7 @@ export function EditProductDialog({
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar produto</DialogTitle>
-          <DialogDescription>Altere o nome, os preços e a quantidade em estoque.</DialogDescription>
+          <DialogDescription>Altere o nome, os preços, os custos adicionais e a quantidade.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">
@@ -101,6 +150,55 @@ export function EditProductDialog({
               <Label htmlFor="edit-sale">Preço de venda</Label>
               <CurrencyInput id="edit-sale" value={sale} onValueChange={setSale} placeholder="0,00" />
             </div>
+          </div>
+
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <Label>Custos adicionais (por unidade)</Label>
+              <span className="text-xs text-muted-foreground">{formatBRL(extrasTotal)}</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickCosts.map(({ label, icon: Icon }) => (
+                <Button key={label} type="button" variant="outline" size="sm" onClick={() => addExtra(label)}>
+                  <Icon className="size-3.5" />
+                  {label}
+                </Button>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => addExtra()}>
+                <Plus className="size-3.5" />
+                Outro
+              </Button>
+            </div>
+
+            {extras.length > 0 ? (
+              <div className="grid gap-2 pt-1">
+                {extras.map((extra) => (
+                  <div key={extra.id} className="flex items-center gap-2">
+                    <Input
+                      value={extra.label}
+                      onChange={(e) => updateExtra(extra.id, { label: e.target.value })}
+                      placeholder="Descrição do custo"
+                      className="flex-1"
+                    />
+                    <CurrencyInput
+                      value={extra.value}
+                      onValueChange={(v) => updateExtra(extra.id, { value: v })}
+                      placeholder="0,00"
+                      className="w-28"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeExtra(extra.id)}
+                      aria-label="Remover custo"
+                    >
+                      <Trash2 className="size-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="grid gap-2">
@@ -126,6 +224,10 @@ export function EditProductDialog({
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Preço de custo</span>
                   <span className="font-medium">{formatBRL(cost!)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Custos adicionais</span>
+                  <span className="font-medium">{formatBRL(extrasTotal)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Taxa Shopee (20% + R$ 4,50)</span>

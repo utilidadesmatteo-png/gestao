@@ -1,14 +1,38 @@
 import type { Product, Sale } from "./types"
 
-export const SHOPEE_PERCENT = 0.2
-export const SHOPEE_FIXED = 4.5
+// Valores padrão usados enquanto o usuário não configura as taxas nas Configurações.
+export const DEFAULT_SHOPEE_PERCENT = 0.2
+export const DEFAULT_SHOPEE_FIXED = 4.5
+
+// Configuração de taxas ativa. É sobrescrita pelas Configurações do usuário
+// (lib/settings.ts) e usada por todos os cálculos de lucro e margem.
+let activePercent = DEFAULT_SHOPEE_PERCENT
+let activeFixed = DEFAULT_SHOPEE_FIXED
 
 /**
- * Taxa da Shopee por item: 20% sobre o PREÇO DE VENDA + R$4,50 fixo.
- * Definido pelo usuário: a taxa incide sobre a venda, como no extrato real da Shopee.
+ * Define as taxas ativas. Valores inválidos/nulos voltam ao padrão,
+ * garantindo que os cálculos nunca quebrem.
+ */
+export function setFeeConfig(percent: number | null | undefined, fixed: number | null | undefined) {
+  activePercent =
+    typeof percent === "number" && Number.isFinite(percent) && percent >= 0 ? percent : DEFAULT_SHOPEE_PERCENT
+  activeFixed = typeof fixed === "number" && Number.isFinite(fixed) && fixed >= 0 ? fixed : DEFAULT_SHOPEE_FIXED
+}
+
+export function getShopeePercent(): number {
+  return activePercent
+}
+
+export function getShopeeFixed(): number {
+  return activeFixed
+}
+
+/**
+ * Taxa da Shopee por item: comissão (%) sobre o PREÇO DE VENDA + taxa fixa.
+ * A taxa incide sobre a venda, como no extrato real da Shopee.
  */
 export function shopeeFee(salePrice: number): number {
-  return salePrice * SHOPEE_PERCENT + SHOPEE_FIXED
+  return salePrice * activePercent + activeFixed
 }
 
 /** Lucro líquido de uma unidade: venda - custo - taxa. */
@@ -74,8 +98,8 @@ export type CalculatorResult = {
  * ROI = lucro líquido / investimento do bolso (custo + extras, SEM taxas da Shopee).
  */
 export function computeCalculator(input: CalculatorInput): CalculatorResult {
-  const commission = input.salePrice * SHOPEE_PERCENT
-  const fixedFee = SHOPEE_FIXED
+  const commission = input.salePrice * activePercent
+  const fixedFee = activeFixed
   const shopeeFee = commission + fixedFee
   const extrasTotal = input.extras.reduce((acc, e) => acc + e.value, 0)
 

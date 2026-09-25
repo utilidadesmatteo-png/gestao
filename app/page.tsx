@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useStore } from "@/lib/store"
-import { computeSummary, SHOPEE_FIXED, SHOPEE_PERCENT } from "@/lib/calculations"
+import { computeSummary, getShopeeFixed, getShopeePercent } from "@/lib/calculations"
 import { StatCards } from "@/components/stat-cards"
 import { AddProductDialog } from "@/components/add-product-dialog"
 import { RegisterSaleDialog } from "@/components/register-sale-dialog"
@@ -11,6 +11,8 @@ import { LowStockPanel } from "@/components/low-stock-panel"
 import { SalesTable } from "@/components/sales-table"
 import { AppSidebar, type View } from "@/components/app-sidebar"
 import { ShopeeCalculator } from "@/components/shopee-calculator"
+import { SettingsScreen } from "@/components/settings-screen"
+import { useSettings } from "@/lib/settings"
 
 const titles: Record<View, { title: string; subtitle: string }> = {
   painel: {
@@ -29,14 +31,20 @@ const titles: Record<View, { title: string; subtitle: string }> = {
     title: "Calculadora Shopee",
     subtitle: "Precifique seus produtos com base nas taxas da Shopee.",
   },
+  configuracoes: {
+    title: "Configurações",
+    subtitle: "Ajuste as taxas da Shopee, o nome da loja e o tema do sistema.",
+  },
 }
 
 export default function Page() {
+  // Carrega as configurações salvas (taxas + tema) já na abertura do app.
+  useSettings()
   const { products, sales } = useStore()
   const summary = computeSummary(products, sales)
   const [view, setView] = useState<View>("painel")
 
-  const feeLabel = `${SHOPEE_PERCENT * 100}% sobre o custo + R$${SHOPEE_FIXED.toFixed(2).replace(".", ",")} fixo por item`
+  const feeLabel = `${getShopeePercent() * 100}% sobre o custo + R$${getShopeeFixed().toFixed(2).replace(".", ",")} fixo por item`
 
   return (
     <div className="flex min-h-svh flex-col bg-background lg:flex-row">
@@ -73,6 +81,8 @@ export default function Page() {
           {view === "vendas" && <SalesTable sales={sales} />}
 
           {view === "calculadora" && <ShopeeCalculator />}
+
+          {view === "configuracoes" && <SettingsScreen />}
         </main>
       </div>
     </div>

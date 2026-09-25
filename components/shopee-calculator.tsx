@@ -24,7 +24,7 @@ import {
   computeCalculator,
   formatBRL,
   formatPercent,
-  SHOPEE_PERCENT,
+  getShopeePercent,
   type ExtraCost,
 } from "@/lib/calculations"
 import { addProduct } from "@/lib/store"
@@ -424,7 +424,7 @@ export function ShopeeCalculator() {
             <Row label="Preço de venda" value={formatBRL(effectiveSale)} />
             <Row label="Custo do produto" value={`- ${formatBRL(costPrice)}`} muted />
             <Row
-              label={`Comissão Shopee (${SHOPEE_PERCENT * 100}%)`}
+              label={`Comissão Shopee (${getShopeePercent() * 100}%)`}
               value={`- ${formatBRL(result.commission)}`}
               muted
             />

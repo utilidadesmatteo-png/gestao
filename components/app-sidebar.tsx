@@ -1,10 +1,10 @@
 "use client"
 
-import { Store, LayoutDashboard, Boxes, Receipt, Calculator, LogOut } from "lucide-react"
+import { Store, LayoutDashboard, Boxes, Receipt, Calculator, Settings, LogOut } from "lucide-react"
 import { logout } from "@/app/login/actions"
 import { Button } from "@/components/ui/button"
 
-export type View = "painel" | "estoque" | "vendas" | "calculadora"
+export type View = "painel" | "estoque" | "vendas" | "calculadora" | "configuracoes"
 
 type NavItem = {
   id: View
@@ -17,6 +17,7 @@ const items: NavItem[] = [
   { id: "estoque", label: "Estoque", icon: <Boxes className="size-[18px]" /> },
   { id: "vendas", label: "Vendas", icon: <Receipt className="size-[18px]" /> },
   { id: "calculadora", label: "Calculadora Shopee", icon: <Calculator className="size-[18px]" /> },
+  { id: "configuracoes", label: "Configurações", icon: <Settings className="size-[18px]" /> },
 ]
 
 export function AppSidebar({

@@ -31,6 +31,7 @@ function ProductRow({ product }: { product: Product }) {
   const profit = unitProfit(product.costPrice, product.salePrice)
   const margin = profitMargin(product.costPrice, product.salePrice)
   const invested = product.costPrice * product.quantity
+  const extras = (product.extraCosts ?? []).reduce((sum, c) => sum + (c.amount || 0), 0)
 
   return (
     <>
@@ -38,6 +39,11 @@ function ProductRow({ product }: { product: Product }) {
         <TableCell className="font-medium">{product.name}</TableCell>
         <TableCell className="text-right tabular-nums text-muted-foreground">
           {formatBRL(product.costPrice)}
+        </TableCell>
+        <TableCell
+          className={`text-right tabular-nums ${extras > 0 ? "text-foreground" : "text-muted-foreground"}`}
+        >
+          {formatBRL(extras)}
         </TableCell>
         <TableCell className="text-right tabular-nums">{formatBRL(product.salePrice)}</TableCell>
         <TableCell
@@ -106,6 +112,7 @@ export function ProductsTable({ products }: { products: Product[] }) {
           <TableRow className="bg-muted/50">
             <TableHead>Produto</TableHead>
             <TableHead className="text-right">Custo</TableHead>
+            <TableHead className="text-right">Extras</TableHead>
             <TableHead className="text-right">Venda</TableHead>
             <TableHead className="text-right">Lucro/un.</TableHead>
             <TableHead className="text-center">Margem</TableHead>

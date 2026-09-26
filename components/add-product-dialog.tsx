@@ -48,6 +48,8 @@ export function AddProductDialog() {
   const totalCost = investment !== null && fee !== null ? investment + fee : null
   const profit = investment !== null && sale !== null ? unitProfit(investment, sale) : null
   const margin = investment !== null && sale !== null ? profitMargin(investment, sale) : null
+  // ROI: retorno sobre o investimento do bolso (custo + custos adicionais, sem taxas da Shopee).
+  const roi = investment !== null && investment > 0 && profit !== null ? (profit / investment) * 100 : null
 
   function addExtra(label = "") {
     setExtras((prev) => [...prev, { id: crypto.randomUUID(), label, value: null }])
@@ -254,6 +256,16 @@ export function AddProductDialog() {
                   <span className="text-muted-foreground">Margem</span>
                   <span className={margin >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"}>
                     {formatPercent(margin)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">ROI</span>
+                  <span
+                    className={
+                      (roi ?? 0) >= 0 ? "font-semibold text-success" : "font-semibold text-destructive"
+                    }
+                  >
+                    {roi !== null ? formatPercent(roi) : "—"}
                   </span>
                 </div>
               </div>

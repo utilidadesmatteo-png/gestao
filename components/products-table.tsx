@@ -31,14 +31,17 @@ function ProductRow({ product }: { product: Product }) {
   const profit = unitProfit(product.costPrice, product.salePrice)
   const margin = profitMargin(product.costPrice, product.salePrice)
   const invested = product.costPrice * product.quantity
-  const extras = (product.extraCosts ?? []).reduce((sum, c) => sum + (c.amount || 0), 0)
+  const extras = (product.extraCosts ?? []).reduce((sum, c) => sum + (c.value || 0), 0)
+  // "Custo" mostra só o preço do produto. O costPrice salvo inclui os extras,
+  // então subtraímos para exibir o custo puro (os extras têm coluna própria).
+  const baseCost = Math.max(0, product.costPrice - extras)
 
   return (
     <>
       <TableRow>
         <TableCell className="font-medium">{product.name}</TableCell>
         <TableCell className="text-right tabular-nums text-muted-foreground">
-          {formatBRL(product.costPrice)}
+          {formatBRL(baseCost)}
         </TableCell>
         <TableCell
           className={`text-right tabular-nums ${extras > 0 ? "text-foreground" : "text-muted-foreground"}`}

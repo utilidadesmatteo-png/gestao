@@ -44,15 +44,39 @@ function isMissingExtraCosts(error: { message?: string; code?: string } | null):
   return (error.message ?? "").toLowerCase().includes("extra_costs")
 }
 
+// Reserva local do detalhamento dos custos extras, usada enquanto a coluna
+// extra_costs não existe no banco. O custo total continua salvo no banco.
+const LOCAL_EXTRAS_KEY = "gestao:extra-costs"
+
+function readLocalExtras(): Record<string, ExtraCost[]> {
+  if (typeof window === "undefined") return {}
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_EXTRAS_KEY) ?? "{}")
+    return parsed && typeof parsed === "object" ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeLocalExtras(productId: string, extras: ExtraCost[] | null) {
+  if (typeof window === "undefined") return
+  const all = readLocalExtras()
+  if (extras && extras.length > 0) all[productId] = extras
+  else delete all[productId]
+  window.localStorage.setItem(LOCAL_EXTRAS_KEY, JSON.stringify(all))
+}
+
 // Converte as linhas do banco (snake_case) para os tipos do app (camelCase).
-function mapProduct(row: Record<string, unknown>): Product {
+function mapProduct(row: Record<string, unknown>, localExtras: Record<string, ExtraCost[]>): Product {
+  const id = String(row.id)
+  const dbExtras = parseExtraCosts(row.extra_costs)
   return {
-    id: String(row.id),
+    id,
     name: String(row.name),
     costPrice: Number(row.cost_price),
     salePrice: Number(row.sale_price),
     quantity: Number(row.quantity),
-    extraCosts: parseExtraCosts(row.extra_costs),
+    extraCosts: dbExtras.length > 0 ? dbExtras : parseExtraCosts(localExtras[id]),
     createdAt: row.created_at ? Date.parse(String(row.created_at)) : Date.now(),
   }
 }
@@ -69,6 +93,28 @@ function mapSale(row: Record<string, unknown>): Sale {
   }
 }
 
+// Envia ao banco os extras que ficaram guardados só neste navegador
+// (salvos antes da coluna extra_costs existir) e limpa a cópia local.
+async function migrateLocalExtras(
+  supabase: ReturnType<typeof createClient>,
+  rows: Record<string, unknown>[],
+  localExtras: Record<string, ExtraCost[]>,
+) {
+  for (const row of rows) {
+    const id = String(row.id)
+    const local = parseExtraCosts(localExtras[id])
+    if (local.length === 0) continue
+    if (parseExtraCosts(row.extra_costs).length > 0) {
+      writeLocalExtras(id, null)
+      continue
+    }
+    const { error } = await supabase.from("products").update({ extra_costs: local }).eq("id", id)
+    if (error) return
+    row.extra_costs = local
+    writeLocalExtras(id, null)
+  }
+}
+
 export async function refresh() {
   const supabase = createClient()
   setSnapshot({ loading: true })
@@ -81,8 +127,10 @@ export async function refresh() {
   if (productsRes.error) console.log("[v0] products fetch error:", productsRes.error.message)
   if (salesRes.error) console.log("[v0] sales fetch error:", salesRes.error.message)
 
+  const localExtras = readLocalExtras()
+  await migrateLocalExtras(supabase, productsRes.data ?? [], localExtras)
   setSnapshot({
-    products: (productsRes.data ?? []).map(mapProduct),
+    products: (productsRes.data ?? []).map((row) => mapProduct(row, localExtras)),
     sales: (salesRes.data ?? []).map(mapSale),
     loading: false,
     loaded: true,
@@ -132,16 +180,24 @@ export async function addProduct(input: {
   }
   const extras = input.extraCosts ?? []
 
-  let { error } = await supabase.from("products").insert({ ...base, extra_costs: extras })
+  let { data, error } = await supabase
+    .from("products")
+    .insert({ ...base, extra_costs: extras })
+    .select("id")
+    .single()
   // Se a coluna extra_costs ainda não existe no banco, salva sem o detalhamento.
+  let savedLocally = false
   if (error && isMissingExtraCosts(error)) {
-    ;({ error } = await supabase.from("products").insert(base))
+    ;({ data, error } = await supabase.from("products").insert(base).select("id").single())
+    savedLocally = true
   }
 
   if (error) {
     console.log("[v0] addProduct error:", error.message)
     return { ok: false, error: "Não foi possível salvar o produto." }
   }
+
+  if (savedLocally && data?.id) writeLocalExtras(String(data.id), extras)
 
   await refresh()
   return { ok: true }
@@ -160,6 +216,7 @@ export async function updateProduct(
   if (patch.quantity !== undefined) row.quantity = patch.quantity
 
   let error
+  let savedLocally = false
   if (patch.extraCosts !== undefined) {
     ;({ error } = await supabase
       .from("products")
@@ -168,6 +225,7 @@ export async function updateProduct(
     // Se a coluna extra_costs ainda não existe, salva o resto normalmente.
     if (error && isMissingExtraCosts(error)) {
       ;({ error } = await supabase.from("products").update(row).eq("id", productId))
+      savedLocally = true
     }
   } else {
     ;({ error } = await supabase.from("products").update(row).eq("id", productId))
@@ -176,6 +234,10 @@ export async function updateProduct(
   if (error) {
     console.log("[v0] updateProduct error:", error.message)
     return { ok: false, error: "Não foi possível salvar as alterações." }
+  }
+
+  if (patch.extraCosts !== undefined) {
+    writeLocalExtras(productId, savedLocally ? patch.extraCosts : null)
   }
 
   await refresh()
@@ -209,6 +271,8 @@ export async function removeProduct(productId: string): Promise<Result> {
     console.log("[v0] removeProduct error:", error.message)
     return { ok: false, error: "Não foi possível excluir o produto." }
   }
+
+  writeLocalExtras(productId, null)
 
   await refresh()
   return { ok: true }

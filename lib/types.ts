@@ -23,6 +23,15 @@ export type Sale = {
   createdAt: number
 }
 
+export type Restock = {
+  id: string
+  productId: string
+  productName: string
+  quantity: number
+  costPrice: number
+  createdAt: number
+}
+
 export type StoreState = {
   products: Product[]
   sales: Sale[]

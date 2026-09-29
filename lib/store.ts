@@ -2,16 +2,25 @@
 
 import { useSyncExternalStore } from "react"
 import { createClient } from "@/lib/supabase/client"
-import type { ExtraCost, Product, Sale } from "./types"
+import type { ExtraCost, Product, Restock, Sale } from "./types"
 
 type StoreSnapshot = {
   products: Product[]
   sales: Sale[]
+  restocks: Restock[]
+  restocksAvailable: boolean
   loading: boolean
   loaded: boolean
 }
 
-let snapshot: StoreSnapshot = { products: [], sales: [], loading: false, loaded: false }
+let snapshot: StoreSnapshot = {
+  products: [],
+  sales: [],
+  restocks: [],
+  restocksAvailable: false,
+  loading: false,
+  loaded: false,
+}
 const listeners = new Set<() => void>()
 let started = false
 
@@ -93,6 +102,17 @@ function mapSale(row: Record<string, unknown>): Sale {
   }
 }
 
+function mapRestock(row: Record<string, unknown>): Restock {
+  return {
+    id: String(row.id),
+    productId: String(row.product_id),
+    productName: String(row.product_name ?? ""),
+    quantity: Number(row.quantity),
+    costPrice: Number(row.cost_price ?? 0),
+    createdAt: row.created_at ? Date.parse(String(row.created_at)) : Date.now(),
+  }
+}
+
 // Envia ao banco os extras que ficaram guardados só neste navegador
 // (salvos antes da coluna extra_costs existir) e limpa a cópia local.
 async function migrateLocalExtras(
@@ -119,9 +139,10 @@ export async function refresh() {
   const supabase = createClient()
   setSnapshot({ loading: true })
 
-  const [productsRes, salesRes] = await Promise.all([
+  const [productsRes, salesRes, restocksRes] = await Promise.all([
     supabase.from("products").select("*").order("created_at", { ascending: false }),
     supabase.from("sales").select("*").order("created_at", { ascending: false }),
+    supabase.from("restocks").select("*").order("created_at", { ascending: false }),
   ])
 
   if (productsRes.error) console.log("[v0] products fetch error:", productsRes.error.message)
@@ -132,6 +153,9 @@ export async function refresh() {
   setSnapshot({
     products: (productsRes.data ?? []).map((row) => mapProduct(row, localExtras)),
     sales: (salesRes.data ?? []).map(mapSale),
+    // A tabela restocks é opcional: sem ela o histórico mostra só as vendas.
+    restocks: restocksRes.error ? [] : (restocksRes.data ?? []).map(mapRestock),
+    restocksAvailable: !restocksRes.error,
     loading: false,
     loaded: true,
   })
@@ -152,7 +176,14 @@ function getSnapshot(): StoreSnapshot {
   return snapshot
 }
 
-const serverSnapshot: StoreSnapshot = { products: [], sales: [], loading: false, loaded: false }
+const serverSnapshot: StoreSnapshot = {
+  products: [],
+  sales: [],
+  restocks: [],
+  restocksAvailable: false,
+  loading: false,
+  loaded: false,
+}
 function getServerSnapshot(): StoreSnapshot {
   return serverSnapshot
 }
@@ -257,6 +288,16 @@ export async function addStock(productId: string, amount: number): Promise<Resul
   if (error) {
     console.log("[v0] addStock error:", error.message)
     return { ok: false, error: "Não foi possível repor o estoque." }
+  }
+
+  if (snapshot.restocksAvailable) {
+    const { error: logError } = await supabase.from("restocks").insert({
+      product_id: product.id,
+      product_name: product.name,
+      quantity: amount,
+      cost_price: product.costPrice,
+    })
+    if (logError) console.log("[v0] restock log error:", logError.message)
   }
 
   await refresh()

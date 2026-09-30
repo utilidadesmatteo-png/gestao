@@ -12,6 +12,7 @@ import { SalesTable } from "@/components/sales-table"
 import { AppSidebar, type View } from "@/components/app-sidebar"
 import { ShopeeCalculator } from "@/components/shopee-calculator"
 import { SettingsScreen } from "@/components/settings-screen"
+import { RoasAnalyzer } from "@/components/roas-analyzer"
 import { useSettings } from "@/lib/settings"
 
 const titles: Record<View, { title: string; subtitle: string }> = {
@@ -30,6 +31,10 @@ const titles: Record<View, { title: string; subtitle: string }> = {
   calculadora: {
     title: "Calculadora Shopee",
     subtitle: "Precifique seus produtos com base nas taxas da Shopee.",
+  },
+  roas: {
+    title: "ROAS / ADS Shopee",
+    subtitle: "Descubra o ROAS mínimo seguro, quanto pagar de ADS por venda e se é hora de ranquear ou escalar.",
   },
   configuracoes: {
     title: "Configurações",
@@ -81,6 +86,8 @@ export default function Page() {
           {view === "vendas" && <SalesTable sales={sales} />}
 
           {view === "calculadora" && <ShopeeCalculator />}
+
+          {view === "roas" && <RoasAnalyzer />}
 
           {view === "configuracoes" && <SettingsScreen />}
         </main>

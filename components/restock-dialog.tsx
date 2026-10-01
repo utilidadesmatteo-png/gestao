@@ -21,11 +21,16 @@ export function RestockDialog({
   product,
   open,
   onOpenChange,
+  suggestedQty,
+  coverageDays,
 }: {
   product: Product
   open: boolean
   onOpenChange: (open: boolean) => void
+  suggestedQty?: number
+  coverageDays?: number
 }) {
+  const initialAmount = suggestedQty && suggestedQty > 0 ? String(suggestedQty) : ""
   const [amount, setAmount] = useState("")
   const [saving, setSaving] = useState(false)
 
@@ -55,7 +60,7 @@ export function RestockDialog({
       open={open}
       onOpenChange={(o) => {
         onOpenChange(o)
-        if (o) setAmount("")
+        if (o) setAmount(initialAmount)
       }}
     >
       <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -63,6 +68,12 @@ export function RestockDialog({
           <DialogTitle>Repor estoque</DialogTitle>
           <DialogDescription>{product.name}</DialogDescription>
         </DialogHeader>
+        {suggestedQty && suggestedQty > 0 ? (
+          <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+            Sugestão: <span className="font-medium text-foreground">{suggestedQty} un.</span>
+            {coverageDays ? ` para cobrir ${coverageDays} dias de vendas.` : "."}
+          </p>
+        ) : null}
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="restock-qty">Quantidade a adicionar</Label>

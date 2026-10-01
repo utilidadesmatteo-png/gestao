@@ -391,11 +391,11 @@ export function RoasAnalyzer() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="roas-sale">Preço de venda</Label>
-            <CurrencyInput id="roas-sale" value={form.salePrice} onValueChange={(v) => patch({ salePrice: v })} />
+            <CurrencyInput id="roas-sale" value={form.salePrice} onValueChange={(v) => patch({ salePrice: v ?? 0 })} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="roas-cost">Custo do produto</Label>
-            <CurrencyInput id="roas-cost" value={form.productCost} onValueChange={(v) => patch({ productCost: v })} />
+            <CurrencyInput id="roas-cost" value={form.productCost} onValueChange={(v) => patch({ productCost: v ?? 0 })} />
           </div>
 
           <NumberField
@@ -408,13 +408,13 @@ export function RoasAnalyzer() {
           />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="roas-fixed">Taxa fixa da Shopee</Label>
-            <CurrencyInput id="roas-fixed" value={form.shopeeFixed} onValueChange={(v) => patch({ shopeeFixed: v })} />
+            <CurrencyInput id="roas-fixed" value={form.shopeeFixed} onValueChange={(v) => patch({ shopeeFixed: v ?? 0 })} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="roas-other">
               Outros custos <span className="font-normal text-muted-foreground">(opcional)</span>
             </Label>
-            <CurrencyInput id="roas-other" value={form.otherCosts} onValueChange={(v) => patch({ otherCosts: v })} />
+            <CurrencyInput id="roas-other" value={form.otherCosts} onValueChange={(v) => patch({ otherCosts: v ?? 0 })} />
           </div>
           <NumberField
             id="roas-sales"

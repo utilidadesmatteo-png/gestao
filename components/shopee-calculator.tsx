@@ -146,11 +146,11 @@ export function ShopeeCalculator() {
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="calc-cost">Custo do produto</Label>
-              <CurrencyInput id="calc-cost" value={costPrice} onValueChange={setCostPrice} />
+              <CurrencyInput id="calc-cost" value={costPrice} onValueChange={(v) => setCostPrice(v ?? 0)} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="calc-sale">Preço de venda</Label>
-              <CurrencyInput id="calc-sale" value={salePrice} onValueChange={setSalePrice} />
+              <CurrencyInput id="calc-sale" value={salePrice} onValueChange={(v) => setSalePrice(v ?? 0)} />
             </div>
           </div>
 
@@ -249,7 +249,7 @@ export function ShopeeCalculator() {
                       <CurrencyInput
                         id={`extra-value-${extra.id}`}
                         value={extra.value}
-                        onValueChange={(v) => updateExtra(extra.id, { value: v })}
+                        onValueChange={(v) => updateExtra(extra.id, { value: v ?? undefined })}
                       />
                     </div>
                     <Button

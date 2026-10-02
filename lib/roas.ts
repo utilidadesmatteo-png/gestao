@@ -4,6 +4,12 @@ import { useSyncExternalStore } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 export const RANK_SALES_THRESHOLD = 15
+export const PROFIT_SALES_THRESHOLD = 100
+export const ROAS_UNLOCK = 8
+export const ROAS_RANK = 10
+export const ROAS_TRACTION = 12
+export const PROFIT_LADDER = [20, 25, 34]
+export const DAILY_BUDGET = 10
 
 export type RoasInputs = {
   productName: string
@@ -15,11 +21,23 @@ export type RoasInputs = {
   salesCount: number
   realRoas: number
   configuredRoas: number
+  /** Vendas nos últimos 3 dias; null quando não informado. */
+  recentSales?: number | null
 }
 
-export type RoasStatus = "RANK" | "ESCALAR" | "AJUSTAR" | "MANTER" | "MARGEM BAIXA" | "AGUARDANDO"
+export type RoasStatus =
+  | "RANK"
+  | "TRAÇÃO"
+  | "LUCRO"
+  | "ESCALAR"
+  | "AJUSTAR"
+  | "MANTER"
+  | "MARGEM BAIXA"
+  | "AGUARDANDO"
 
 export type Direction = "AUMENTAR" | "DIMINUIR" | "MANTER" | null
+
+export type Stage = "RANK" | "TRAÇÃO" | "LUCRO"
 
 export type RoasAnalysis = {
   shopeeFee: number
@@ -27,25 +45,35 @@ export type RoasAnalysis = {
   profitBeforeAds: number
   margin: number
   lowMargin: boolean
-  adsMaxPercent: number
-  roasMinExact: number
-  roasMin: number
-  cpaMax: number
-  phase: "RANK" | "ESCALA"
-  rankRange: [number, number]
+  breakEvenRoas: number
+  stage: Stage
+  stageTarget: number
+  recommendedRoas: number
+  cpa: number
+  profitPerSale: number
+  suggestedPrice: number | null
+  suggestedPriceProfit: number
+  noSales: boolean
+  nextMilestone: number | null
   status: RoasStatus
   direction: Direction
   action: string
-  configuredBelowFloor: boolean
-  atFloor: boolean
 }
 
-// Tabela de segurança: a margem define o teto de ADS, e o teto define o ROAS mínimo.
-function adsTier(margin: number): { percent: number } | null {
-  if (margin < 10) return null
-  if (margin <= 15) return { percent: 3 }
-  if (margin <= 20) return { percent: 5 }
-  return { percent: 8 }
+const near = (a: number, b: number) => Math.abs(a - b) < 0.5
+
+function stageOf(sales: number): Stage {
+  if (sales < RANK_SALES_THRESHOLD) return "RANK"
+  if (sales < PROFIT_SALES_THRESHOLD) return "TRAÇÃO"
+  return "LUCRO"
+}
+
+// Menor preço terminado em ,90 que não dá prejuízo pagando ADS no ROAS informado.
+function priceForRoas(input: RoasInputs, roas: number): number | null {
+  const denom = 1 - input.shopeePercent / 100 - 1 / roas
+  if (denom <= 0) return null
+  const raw = (input.productCost + input.shopeeFixed + input.otherCosts) / denom
+  return Math.ceil(raw - 0.9 - 1e-9) + 0.9
 }
 
 export function analyzeRoas(input: RoasInputs): RoasAnalysis {
@@ -54,21 +82,19 @@ export function analyzeRoas(input: RoasInputs): RoasAnalysis {
   const totalCostNoAds = input.productCost + shopeeFee + input.shopeeFixed + input.otherCosts
   const profitBeforeAds = sale - totalCostNoAds
   const margin = sale > 0 ? (profitBeforeAds / sale) * 100 : 0
+  const lowMargin = sale > 0 && profitBeforeAds <= 0
+  const breakEvenRoas = profitBeforeAds > 0 ? sale / profitBeforeAds : 0
 
-  const tier = adsTier(margin)
-  const lowMargin = tier === null
-  const adsMaxPercent = tier?.percent ?? 0
-  const roasMinExact = adsMaxPercent > 0 ? 100 / adsMaxPercent : 0
-  // Arredonda para cima; o epsilon evita que 20,0000001 vire 21.
-  const roasMin = roasMinExact > 0 ? Math.ceil(roasMinExact - 1e-9) : 0
-  const cpaMax = sale * (adsMaxPercent / 100)
+  const stage = stageOf(input.salesCount)
+  const stageTarget = stage === "RANK" ? ROAS_RANK : stage === "TRAÇÃO" ? ROAS_TRACTION : PROFIT_LADDER[0]
+  const nextMilestone =
+    stage === "RANK" ? RANK_SALES_THRESHOLD : stage === "TRAÇÃO" ? PROFIT_SALES_THRESHOLD : null
 
-  const phase = input.salesCount < RANK_SALES_THRESHOLD ? "RANK" : "ESCALA"
-  const rankRange: [number, number] = [roasMin + 1, roasMin + 2]
+  const configured = input.configuredRoas
+  const real = input.realRoas
+  const noSales = input.recentSales === 0 && configured > 0
 
-  const configuredBelowFloor = !lowMargin && input.configuredRoas > 0 && input.configuredRoas < roasMin
-  const atFloor = !lowMargin && input.configuredRoas > 0 && input.configuredRoas <= roasMin
-
+  let recommended = stageTarget
   let status: RoasStatus
   let direction: Direction = null
   let action: string
@@ -76,36 +102,92 @@ export function analyzeRoas(input: RoasInputs): RoasAnalysis {
   if (sale <= 0) {
     status = "AGUARDANDO"
     action = "Preencha os dados do produto"
-  } else if (lowMargin) {
-    status = "MARGEM BAIXA"
-    action = "Revisar preço, custo ou taxas antes de investir em ADS"
-  } else if (phase === "RANK") {
-    status = "RANK"
-    action = `Usar ROAS entre ${rankRange[0]}x e ${rankRange[1]}x`
-  } else if (input.realRoas <= 0 || input.configuredRoas <= 0) {
-    status = "AGUARDANDO"
-    action = "Informe o ROAS configurado e o ROAS real dos últimos 3 dias"
-  } else if (configuredBelowFloor) {
-    status = "AJUSTAR"
-    direction = "AUMENTAR"
-    action = `Subir o ROAS da campanha para no mínimo ${roasMin}x`
-  } else if (Math.abs(input.realRoas - input.configuredRoas) < 0.01) {
-    status = "MANTER"
-    direction = "MANTER"
-    action = "Manter o ROAS atual"
-  } else if (input.realRoas > input.configuredRoas) {
-    status = "ESCALAR"
-    direction = "AUMENTAR"
-    action = "Aumentar gradualmente o ROAS alvo"
-  } else if (atFloor) {
-    // Já está no piso: a lógica pediria redução, mas o limite de segurança impede.
-    status = "AJUSTAR"
-    direction = "MANTER"
-    action = `Manter em ${roasMin}x (limite de segurança)`
+  } else if (stage !== "LUCRO") {
+    const stageLabel = stage === "RANK" ? "15" : "100"
+    if (noSales) {
+      recommended = configured > ROAS_UNLOCK ? ROAS_UNLOCK : Math.max(configured - 2, 4)
+      status = "AJUSTAR"
+      direction = "DIMINUIR"
+      action = `3 dias sem venda: baixe o ROAS para ${recommended}x. Não aumente.`
+    } else if (configured <= 0) {
+      status = stage
+      action = `Configure ROAS ${stageTarget}x com R$ ${DAILY_BUDGET} por dia e deixe rodar 3 dias sem mexer`
+    } else if (configured > stageTarget + 0.5) {
+      status = "AJUSTAR"
+      direction = "DIMINUIR"
+      action = `ROAS ${formatRoas(configured)} é alto demais para esta fase. Baixe para ${stageTarget}x`
+    } else if (configured < stageTarget - 0.5 && stage === "TRAÇÃO") {
+      status = "AJUSTAR"
+      direction = "AUMENTAR"
+      action = `Bateu ${RANK_SALES_THRESHOLD} vendas: suba de ${formatRoas(configured)} para ${stageTarget}x`
+    } else {
+      recommended = near(configured, stageTarget) ? stageTarget : configured
+      status = stage
+      direction = "MANTER"
+      action = `Mantenha ${formatRoas(recommended)} até bater ${stageLabel} vendas`
+    }
   } else {
-    status = "AJUSTAR"
-    direction = "DIMINUIR"
-    action = `Diminuir o ROAS da campanha, sem ficar abaixo de ${roasMin}x`
+    const prev = [ROAS_TRACTION, ...PROFIT_LADDER].filter((r) => r < configured - 0.5).at(-1)
+    const next = PROFIT_LADDER.find((r) => r > configured + 0.5)
+    if (configured <= 0 || configured < PROFIT_LADDER[0] - 0.5) {
+      recommended = PROFIT_LADDER[0]
+      status = "LUCRO"
+      direction = configured > 0 ? "AUMENTAR" : null
+      action = `Bateu ${PROFIT_SALES_THRESHOLD} vendas: suba o ROAS para ${recommended}x para começar a lucrar`
+    } else if (noSales) {
+      recommended = prev ?? ROAS_TRACTION
+      status = "AJUSTAR"
+      direction = "DIMINUIR"
+      action = `3 dias sem venda em ${formatRoas(configured)}: volte um degrau, para ${recommended}x`
+    } else if (real <= 0) {
+      recommended = configured
+      status = "MANTER"
+      direction = "MANTER"
+      action = "Informe o ROAS real dos últimos 3 dias para saber se dá para subir"
+    } else if (real >= configured - 0.01) {
+      if (next) {
+        recommended = next
+        status = "ESCALAR"
+        direction = "AUMENTAR"
+        action = `ROAS real acima da meta: suba para ${next}x`
+      } else {
+        recommended = configured
+        status = "MANTER"
+        direction = "MANTER"
+        action = `Topo da escada (${formatRoas(configured)}): mantenha e colha o lucro`
+      }
+    } else if (prev && prev >= PROFIT_LADDER[0]) {
+      recommended = prev
+      status = "AJUSTAR"
+      direction = "DIMINUIR"
+      action = `Entrega abaixo da meta: volte para ${prev}x`
+    } else {
+      recommended = configured
+      status = "MANTER"
+      direction = "MANTER"
+      action = `Mantenha ${formatRoas(configured)} e acompanhe mais 3 dias`
+    }
+  }
+
+  if (lowMargin) {
+    status = "MARGEM BAIXA"
+    direction = null
+    action = "Mesmo sem ADS o produto dá prejuízo. Ajuste o preço antes de anunciar"
+  }
+
+  const cpa = sale > 0 && recommended > 0 ? sale / recommended : 0
+  const profitPerSale = profitBeforeAds - cpa
+
+  let suggestedPrice: number | null = null
+  let suggestedPriceProfit = 0
+  if (sale > 0 && profitPerSale < 0) {
+    const roasForPrice = Math.max(recommended, ROAS_RANK)
+    const p = priceForRoas(input, roasForPrice)
+    if (p !== null && p > sale) {
+      suggestedPrice = p
+      suggestedPriceProfit =
+        p - input.productCost - p * (input.shopeePercent / 100) - input.shopeeFixed - input.otherCosts - p / roasForPrice
+    }
   }
 
   return {
@@ -114,17 +196,19 @@ export function analyzeRoas(input: RoasInputs): RoasAnalysis {
     profitBeforeAds,
     margin,
     lowMargin,
-    adsMaxPercent,
-    roasMinExact,
-    roasMin,
-    cpaMax,
-    phase,
-    rankRange,
+    breakEvenRoas,
+    stage,
+    stageTarget,
+    recommendedRoas: recommended,
+    cpa,
+    profitPerSale,
+    suggestedPrice,
+    suggestedPriceProfit,
+    noSales,
+    nextMilestone,
     status,
     direction,
     action,
-    configuredBelowFloor,
-    atFloor,
   }
 }
 
@@ -256,8 +340,8 @@ export async function saveRoasAnalysis(inputs: RoasInputs, analysis: RoasAnalysi
     createdAt: new Date().toISOString(),
     inputs,
     margin: analysis.margin,
-    roasMin: analysis.roasMin,
-    cpaMax: analysis.cpaMax,
+    roasMin: analysis.recommendedRoas,
+    cpaMax: analysis.cpa,
     status: analysis.status,
     action: analysis.action,
   }

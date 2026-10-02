@@ -5,11 +5,12 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  CalendarClock,
   Equal,
   History,
   Rocket,
-  ShieldCheck,
   Sparkles,
+  Tag,
   Target,
   Trash2,
   TrendingUp,
@@ -22,7 +23,13 @@ import { Label } from "@/components/ui/label"
 import { formatBRL, getShopeeFixed, getShopeePercent } from "@/lib/calculations"
 import { useStore } from "@/lib/store"
 import {
+  DAILY_BUDGET,
+  PROFIT_LADDER,
+  PROFIT_SALES_THRESHOLD,
   RANK_SALES_THRESHOLD,
+  ROAS_RANK,
+  ROAS_TRACTION,
+  ROAS_UNLOCK,
   analyzeRoas,
   deleteRoasAnalysis,
   formatPct,
@@ -53,7 +60,7 @@ function NumberField({
   integer,
 }: {
   id: string
-  label: string
+  label: React.ReactNode
   value: string
   onChange: (v: string) => void
   suffix?: string
@@ -89,6 +96,8 @@ function NumberField({
 
 const statusStyles: Record<RoasStatus, { box: string; icon: typeof Rocket; label: string }> = {
   RANK: { box: "bg-primary text-primary-foreground", icon: Target, label: "RANK" },
+  "TRAÇÃO": { box: "border-2 border-primary bg-primary/10 text-foreground", icon: TrendingUp, label: "TRAÇÃO" },
+  LUCRO: { box: "bg-success text-success-foreground", icon: Wallet, label: "LUCRO" },
   ESCALAR: { box: "bg-success text-success-foreground", icon: Rocket, label: "ESCALAR" },
   AJUSTAR: { box: "border-2 border-primary bg-primary/10 text-foreground", icon: TrendingUp, label: "AJUSTAR" },
   MANTER: { box: "bg-foreground text-background", icon: Equal, label: "MANTER" },
@@ -97,7 +106,7 @@ const statusStyles: Record<RoasStatus, { box: string; icon: typeof Rocket; label
 }
 
 function StatusBadge({ status, small }: { status: RoasStatus; small?: boolean }) {
-  const s = statusStyles[status]
+  const s = statusStyles[status] ?? statusStyles.AGUARDANDO
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-md font-semibold tracking-wide ${s.box} ${
@@ -110,144 +119,156 @@ function StatusBadge({ status, small }: { status: RoasStatus; small?: boolean })
 }
 
 function buildRecommendation(inputs: RoasInputs, a: RoasAnalysis): string[] {
-  if (a.status === "AGUARDANDO" && inputs.salePrice <= 0) {
+  if (inputs.salePrice <= 0) {
     return ["Preencha o preço de venda e o custo do produto para ver a análise."]
   }
+
+  const lines: string[] = []
   if (a.lowMargin) {
-    return [
-      `Sua margem antes dos ADS é de ${formatPct(a.margin)}.`,
-      "Este produto possui margem inferior a 10%. Revise preço de venda, custo do produto ou taxas antes de investir em ADS.",
-      "Não é recomendada uma estratégia agressiva de anúncios neste momento.",
-    ]
+    lines.push(
+      "Mesmo sem gastar nada com ADS este produto dá prejuízo. Antes de anunciar, ajuste o preço ou o custo.",
+    )
+    return lines
   }
-  const base = [
-    `Sua margem é de ${formatPct(a.margin)}.`,
-    `Você pode utilizar até ${a.adsMaxPercent}% do faturamento em ADS.`,
-    `Seu ROAS mínimo é ${a.roasMin}x.`,
-  ]
-  if (a.phase === "RANK") {
-    return [
-      `Seu produto possui ${inputs.salesCount} ${inputs.salesCount === 1 ? "venda" : "vendas"} e ainda está em fase de ranqueamento.`,
-      ...base,
-      `Para RANK, utilize aproximadamente ${a.rankRange[0]}x a ${a.rankRange[1]}x (recomendado: ${a.rankRange[0]}x).`,
-      `Você pode gastar até ${formatBRL(a.cpaMax)} em anúncio para gerar cada venda.`,
-      "Produto em fase de ranqueamento. Priorize geração de vendas sem ultrapassar o limite de ADS definido pela margem.",
-    ]
+
+  const n = inputs.salesCount
+  if (a.stage === "RANK") {
+    lines.push(
+      `Fase RANK: ${n} de ${RANK_SALES_THRESHOLD} vendas. Agora o objetivo é vender, não lucrar. Você está comprando vendas para a Shopee começar a entregar no orgânico.`,
+    )
+  } else if (a.stage === "TRAÇÃO") {
+    lines.push(
+      `Fase TRAÇÃO: ${n} de ${PROFIT_SALES_THRESHOLD} vendas. Continue rankeando com ${ROAS_TRACTION}x até bater ${PROFIT_SALES_THRESHOLD} vendas.`,
+    )
+  } else {
+    lines.push(
+      `Fase LUCRO: ${n} vendas. A Shopee já entrega no orgânico. Agora suba o ROAS em degraus (${PROFIT_LADDER.join("x → ")}x) para lucrar.`,
+    )
   }
-  if (a.status === "AGUARDANDO") {
-    return [
-      `Seu produto já possui ${inputs.salesCount} vendas e está em modo ESCALA.`,
-      ...base,
-      "Informe o ROAS configurado na campanha e o ROAS real dos últimos 3 dias para receber a recomendação.",
-    ]
+
+  lines.push(
+    `Com ROAS ${formatRoas(a.recommendedRoas)} você paga até ${formatBRL(a.cpa)} de ADS por venda (${formatBRL(inputs.salePrice)} ÷ ${formatRoas(a.recommendedRoas)}).`,
+  )
+
+  if (a.profitPerSale >= 0) {
+    lines.push(`Sobra ${formatBRL(a.profitPerSale)} de lucro por venda depois do ADS.`)
+  } else if (a.stage === "LUCRO") {
+    lines.push(
+      `Nesse ROAS você perde ${formatBRL(-a.profitPerSale)} por venda. Na fase de lucro isso não compensa: suba o ROAS ou o preço.`,
+    )
+  } else {
+    lines.push(
+      `Você toma ${formatBRL(-a.profitPerSale)} de prejuízo por venda. É normal na fase de rank: é o preço de comprar as primeiras vendas.`,
+    )
   }
-  const head = [
-    `Seu produto já possui ${inputs.salesCount} vendas.`,
-    `Seu ROAS configurado é ${formatRoas(inputs.configuredRoas)} e seu ROAS real dos últimos 3 dias foi ${formatRoas(inputs.realRoas)}.`,
-  ]
-  if (a.configuredBelowFloor) {
-    return [
-      ...head,
-      `O ROAS configurado está abaixo do ROAS mínimo seguro (${a.roasMin}x). Nesse nível, o gasto com ADS passa do limite permitido pela margem.`,
-      `Status: AJUSTAR. Ação recomendada: subir o ROAS da campanha para pelo menos ${a.roasMin}x.`,
-    ]
+
+  if (a.breakEvenRoas > 0) {
+    lines.push(
+      `Seu ROAS de empate é ${formatRoas(Math.round(a.breakEvenRoas * 10) / 10)}. Acima dele você lucra, abaixo você paga para vender.`,
+    )
   }
-  if (a.status === "ESCALAR") {
-    return [
-      ...head,
-      "O desempenho real está acima da meta da campanha.",
-      "Status: ESCALAR. Ação recomendada: aumentar gradualmente o ROAS alvo buscando mais rentabilidade.",
-    ]
-  }
-  if (a.status === "MANTER") {
-    return [
-      ...head,
-      "A campanha está entregando próxima da meta configurada. Mantenha o ROAS atual e continue acompanhando os próximos dias.",
-    ]
-  }
-  if (a.atFloor) {
-    return [
-      ...head,
-      "A campanha está entregando abaixo da meta configurada.",
-      `Status: AJUSTAR. O ROAS configurado já está no limite de segurança (${a.roasMin}x) e não pode ser reduzido. Revise preço, custo ou anúncio antes de mexer no ROAS.`,
-    ]
-  }
-  return [
-    ...head,
-    "A campanha está entregando abaixo da meta configurada.",
-    "Status: AJUSTAR. Ação recomendada: reduzir o ROAS configurado para facilitar a entrega da campanha.",
-    `Nunca ultrapasse para baixo o ROAS mínimo seguro do produto (${a.roasMin}x).`,
-  ]
+  return lines
 }
 
-function RoasScale({ a, configured, real }: { a: RoasAnalysis; configured: number; real: number }) {
-  if (a.lowMargin || a.roasMin <= 0) return null
-  const safeStart = a.rankRange[1]
-  const scaleStart = Math.ceil(a.roasMin * 1.5)
-  const max = Math.max(a.roasMin * 2, configured, real, scaleStart + 2) * 1.1
-  const pos = (v: number) => `${Math.min(Math.max((v / max) * 100, 0), 100)}%`
-
-  const zones = [
-    { from: 0, to: a.roasMin, label: "Prejuízo / Risco", cls: "bg-destructive/70" },
-    { from: a.roasMin, to: safeStart, label: "Rank", cls: "bg-primary" },
-    { from: safeStart, to: scaleStart, label: "Seguro", cls: "bg-success/50" },
-    { from: scaleStart, to: max, label: "Lucro / Escala", cls: "bg-success" },
-  ].filter((z) => z.to > z.from)
-
-  const markers = [
-    { value: configured, label: "Atual", cls: "bg-foreground" },
-    { value: real, label: "Real", cls: "bg-primary" },
-  ].filter((m) => m.value > 0)
+function MarginBreakdown({ inputs, a }: { inputs: RoasInputs; a: RoasAnalysis }) {
+  if (inputs.salePrice <= 0) return null
+  const rows: [string, number][] = [
+    ["Preço de venda", inputs.salePrice],
+    ["Custo do produto", -inputs.productCost],
+    [`Comissão (${formatPct(inputs.shopeePercent, 0)})`, -a.shopeeFee],
+    ["Taxa fixa", -inputs.shopeeFixed],
+  ]
+  if (inputs.otherCosts > 0) rows.push(["Outros custos", -inputs.otherCosts])
 
   return (
     <section className="rounded-xl border bg-card p-5">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-        Onde está o seu ROAS
-      </h2>
-
-      <div className="relative mt-10 mb-2">
-        <div className="flex h-3 w-full overflow-hidden rounded-full">
-          {zones.map((z) => (
-            <div key={z.label} className={z.cls} style={{ width: `${((z.to - z.from) / max) * 100}%` }} />
-          ))}
-        </div>
-
-        {/* Piso de segurança */}
-        <div className="absolute -top-7 bottom-[-6px] flex flex-col items-center" style={{ left: pos(a.roasMin) }}>
-          <span className="-translate-x-1/2 whitespace-nowrap rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-white">
-            ROAS MÍNIMO {a.roasMin}x
-          </span>
-          <span className="w-0.5 flex-1 -translate-x-1/2 bg-destructive" />
-        </div>
-
-        {markers.map((m) => (
-          <div
-            key={m.label}
-            className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
-            style={{ left: pos(m.value) }}
-          >
-            <span className={`size-4 rounded-full border-2 border-card ${m.cls}`} aria-hidden />
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Margem real por venda</h2>
+      <dl className="mt-3 flex flex-col gap-1.5 text-sm">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex items-center justify-between gap-3">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className={`tabular-nums ${v < 0 ? "text-destructive" : "font-medium"}`}>
+              {v < 0 ? `− ${formatBRL(-v)}` : formatBRL(v)}
+            </dd>
           </div>
         ))}
+        <div className="mt-1 flex items-center justify-between gap-3 border-t pt-2">
+          <dt className="font-medium">Sobra antes do ADS</dt>
+          <dd className={`font-bold tabular-nums ${a.profitBeforeAds >= 0 ? "text-success" : "text-destructive"}`}>
+            {formatBRL(a.profitBeforeAds)}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <dt className="text-muted-foreground">ADS a {formatRoas(a.recommendedRoas)}</dt>
+          <dd className="tabular-nums text-destructive">− {formatBRL(a.cpa)}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t pt-2">
+          <dt className="font-medium">Lucro por venda com ADS</dt>
+          <dd className={`font-bold tabular-nums ${a.profitPerSale >= 0 ? "text-success" : "text-destructive"}`}>
+            {formatBRL(a.profitPerSale)}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  )
+}
+
+const ladderSteps = [
+  { roas: ROAS_UNLOCK, label: "Destravar", hint: "3 dias sem venda" },
+  { roas: ROAS_RANK, label: "Rank", hint: `0–${RANK_SALES_THRESHOLD - 1} vendas` },
+  { roas: ROAS_TRACTION, label: "Tração", hint: `${RANK_SALES_THRESHOLD}–${PROFIT_SALES_THRESHOLD - 1} vendas` },
+  ...PROFIT_LADDER.map((roas) => ({ roas, label: "Lucro", hint: `${PROFIT_SALES_THRESHOLD}+ vendas` })),
+]
+
+function RoasLadder({ a, inputs }: { a: RoasAnalysis; inputs: RoasInputs }) {
+  const progressTarget = a.nextMilestone
+  const progress = progressTarget ? Math.min(inputs.salesCount / progressTarget, 1) : 1
+
+  return (
+    <section className="rounded-xl border bg-card p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Escada do ROAS</h2>
+        <p className="text-xs text-muted-foreground">
+          {progressTarget
+            ? `${inputs.salesCount} de ${progressTarget} vendas para a próxima fase`
+            : `${inputs.salesCount} vendas · fase de lucro`}
+        </p>
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-        {markers.map((m) => (
-          <span key={m.label} className="flex items-center gap-1.5">
-            <span className={`size-2.5 rounded-full ${m.cls}`} aria-hidden />
-            ROAS {m.label.toLowerCase()}: <strong className="text-foreground">{formatRoas(m.value)}</strong>
-          </span>
-        ))}
+      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress * 100}%` }} />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-        {zones.map((z) => (
-          <div key={z.label} className="flex items-center gap-1.5">
-            <span className={`size-2.5 shrink-0 rounded-sm ${z.cls}`} aria-hidden />
-            <span className="text-muted-foreground">{z.label}</span>
-          </div>
-        ))}
-      </div>
+      <ol className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {ladderSteps.map((step) => {
+          const isRecommended = inputs.salePrice > 0 && Math.abs(step.roas - a.recommendedRoas) < 0.5
+          const isCurrent = inputs.configuredRoas > 0 && Math.abs(step.roas - inputs.configuredRoas) < 0.5
+          const losing = a.breakEvenRoas > 0 && step.roas < a.breakEvenRoas
+          return (
+            <li
+              key={step.roas}
+              className={`relative flex flex-col gap-0.5 rounded-lg border p-3 ${
+                isRecommended ? "border-primary bg-primary/10 ring-1 ring-primary" : ""
+              }`}
+              aria-current={isRecommended ? "step" : undefined}
+            >
+              <span className="text-2xl font-bold tabular-nums tracking-tight">{step.roas}x</span>
+              <span className="text-xs font-semibold">{step.label}</span>
+              <span className="text-[11px] text-muted-foreground">{step.hint}</span>
+              {inputs.salePrice > 0 && (
+                <span className={`mt-1 text-[11px] tabular-nums ${losing ? "text-destructive" : "text-success"}`}>
+                  {losing ? "prejuízo" : "lucro"} · {formatBRL(inputs.salePrice / step.roas)}/venda
+                </span>
+              )}
+              {(isRecommended || isCurrent) && (
+                <span className="absolute -top-2 right-2 rounded bg-foreground px-1.5 text-[10px] font-semibold text-background">
+                  {isRecommended ? "FAZER" : "ATUAL"}
+                </span>
+              )}
+            </li>
+          )
+        })}
+      </ol>
     </section>
   )
 }
@@ -284,6 +305,7 @@ type FormState = {
   shopeeFixed: number
   otherCosts: number
   salesCount: string
+  recentSales: string
   realRoas: string
   configuredRoas: string
 }
@@ -297,6 +319,7 @@ function initialForm(): FormState {
     shopeeFixed: getShopeeFixed(),
     otherCosts: 0,
     salesCount: "",
+    recentSales: "",
     realRoas: "",
     configuredRoas: "",
   }
@@ -316,6 +339,7 @@ export function RoasAnalyzer() {
     shopeeFixed: form.shopeeFixed,
     otherCosts: form.otherCosts,
     salesCount: Math.floor(parseNumber(form.salesCount)),
+    recentSales: form.recentSales === "" ? null : Math.floor(Number(form.recentSales)),
     realRoas: parseNumber(form.realRoas),
     configuredRoas: parseNumber(form.configuredRoas),
   }
@@ -356,6 +380,8 @@ export function RoasAnalyzer() {
       shopeeFixed: entryInputs.shopeeFixed,
       otherCosts: entryInputs.otherCosts,
       salesCount: entryInputs.salesCount > 0 ? String(entryInputs.salesCount) : "",
+      recentSales:
+        entryInputs.recentSales === null || entryInputs.recentSales === undefined ? "" : String(entryInputs.recentSales),
       realRoas: toText(entryInputs.realRoas),
       configuredRoas: toText(entryInputs.configuredRoas),
     })
@@ -367,6 +393,7 @@ export function RoasAnalyzer() {
   const StatusIcon = statusStyle.icon
   const DirectionIcon = a.direction === "AUMENTAR" ? ArrowUp : a.direction === "DIMINUIR" ? ArrowDown : Equal
   const canSave = inputs.productName.length > 0 && inputs.salePrice > 0
+  const hasData = inputs.salePrice > 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -391,11 +418,11 @@ export function RoasAnalyzer() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="roas-sale">Preço de venda</Label>
-            <CurrencyInput id="roas-sale" value={form.salePrice} onValueChange={(v) => patch({ salePrice: v })} />
+            <CurrencyInput id="roas-sale" value={form.salePrice} onValueChange={(v) => patch({ salePrice: v ?? 0 })} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="roas-cost">Custo do produto</Label>
-            <CurrencyInput id="roas-cost" value={form.productCost} onValueChange={(v) => patch({ productCost: v })} />
+            <CurrencyInput id="roas-cost" value={form.productCost} onValueChange={(v) => patch({ productCost: v ?? 0 })} />
           </div>
 
           <NumberField
@@ -408,13 +435,13 @@ export function RoasAnalyzer() {
           />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="roas-fixed">Taxa fixa da Shopee</Label>
-            <CurrencyInput id="roas-fixed" value={form.shopeeFixed} onValueChange={(v) => patch({ shopeeFixed: v })} />
+            <CurrencyInput id="roas-fixed" value={form.shopeeFixed} onValueChange={(v) => patch({ shopeeFixed: v ?? 0 })} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="roas-other">
               Outros custos <span className="font-normal text-muted-foreground">(opcional)</span>
             </Label>
-            <CurrencyInput id="roas-other" value={form.otherCosts} onValueChange={(v) => patch({ otherCosts: v })} />
+            <CurrencyInput id="roas-other" value={form.otherCosts} onValueChange={(v) => patch({ otherCosts: v ?? 0 })} />
           </div>
           <NumberField
             id="roas-sales"
@@ -426,30 +453,46 @@ export function RoasAnalyzer() {
           />
 
           <NumberField
-            id="roas-real"
-            label="ROAS real (últimos 3 dias)"
-            value={form.realRoas}
-            onChange={(v) => patch({ realRoas: v })}
-            suffix="x"
-            placeholder="Ex.: 18"
-          />
-          <NumberField
             id="roas-config"
             label="ROAS configurado na campanha"
             value={form.configuredRoas}
             onChange={(v) => patch({ configuredRoas: v })}
             suffix="x"
-            placeholder="Ex.: 15"
+            placeholder="Ex.: 10"
           />
-          <div className="flex items-end sm:col-span-2">
+          <NumberField
+            id="roas-recent"
+            label={
+              <>
+                Vendas nos últimos 3 dias <span className="font-normal text-muted-foreground">(opcional)</span>
+              </>
+            }
+            value={form.recentSales}
+            onChange={(v) => patch({ recentSales: v })}
+            placeholder="Ex.: 2"
+            integer
+          />
+          <NumberField
+            id="roas-real"
+            label={
+              <>
+                ROAS real (3 dias) <span className="font-normal text-muted-foreground">(opcional)</span>
+              </>
+            }
+            value={form.realRoas}
+            onChange={(v) => patch({ realRoas: v })}
+            suffix="x"
+            placeholder="Ex.: 18"
+          />
+          <div className="flex items-end">
             <Button type="submit" size="lg" className="w-full gap-2 font-semibold" disabled={!canSave}>
               <Sparkles className="size-4" />
-              {savedAt ? "Análise salva no histórico" : "ANALISAR PRODUTO"}
+              {savedAt ? "Análise salva" : "ANALISAR PRODUTO"}
             </Button>
           </div>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
-          Os resultados abaixo se atualizam enquanto você digita. O botão salva a análise no histórico.
+          Os resultados se atualizam enquanto você digita. O botão salva a análise no histórico.
         </p>
       </form>
 
@@ -462,7 +505,7 @@ export function RoasAnalyzer() {
             </span>
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wide opacity-80">
-                Status {a.phase === "ESCALA" && !a.lowMargin && inputs.salePrice > 0 ? "· modo escala" : ""}
+                Status{hasData && !a.lowMargin ? ` · fase ${a.stage.toLowerCase()}` : ""}
               </p>
               <p className="text-3xl font-bold tracking-tight">{statusStyle.label}</p>
               <p className="mt-0.5 text-sm opacity-90 text-pretty">{a.action}</p>
@@ -470,53 +513,46 @@ export function RoasAnalyzer() {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Metric label="ROAS mínimo" value={a.roasMin > 0 ? `${a.roasMin}x` : "—"} hint="Piso de segurança" tone="primary" big />
             <Metric
-              label="CPA máximo"
-              value={a.cpaMax > 0 ? formatBRL(a.cpaMax) : "—"}
+              label="ROAS para usar"
+              value={hasData && !a.lowMargin ? formatRoas(a.recommendedRoas) : "—"}
+              hint={inputs.configuredRoas > 0 ? `Atual: ${formatRoas(inputs.configuredRoas)}` : "Configure na campanha"}
+              tone="primary"
+              big
+            />
+            <Metric
+              label="Pague até"
+              value={hasData && !a.lowMargin ? formatBRL(a.cpa) : "—"}
               hint="de ADS por venda"
               big
             />
-            <Metric label="ROAS atual" value={formatRoas(inputs.configuredRoas)} hint="Configurado na campanha" />
-            <Metric label="ROAS real" value={formatRoas(inputs.realRoas)} hint="Últimos 3 dias" />
             <Metric
-              label="Margem"
-              value={inputs.salePrice > 0 ? formatPct(a.margin) : "—"}
-              hint="antes dos ADS"
-              tone={inputs.salePrice > 0 ? (a.lowMargin ? "loss" : "profit") : undefined}
+              label="Lucro por venda"
+              value={hasData ? formatBRL(a.profitPerSale) : "—"}
+              hint="depois do ADS"
+              tone={hasData ? (a.profitPerSale >= 0 ? "profit" : "loss") : undefined}
             />
             <Metric
-              label="Lucro antes dos ADS"
-              value={inputs.salePrice > 0 ? formatBRL(a.profitBeforeAds) : "—"}
-              tone={inputs.salePrice > 0 ? (a.profitBeforeAds >= 0 ? "profit" : "loss") : undefined}
+              label="ROAS de empate"
+              value={a.breakEvenRoas > 0 ? formatRoas(Math.round(a.breakEvenRoas * 10) / 10) : "—"}
+              hint={hasData ? `Margem ${formatPct(a.margin, 1)} antes do ADS` : undefined}
             />
           </div>
+
+          <MarginBreakdown inputs={inputs} a={a} />
         </div>
 
         <div className="flex flex-col gap-4">
-          <section className="flex flex-1 flex-col rounded-xl border bg-card p-5">
+          <section className="flex flex-col rounded-xl border bg-card p-5">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold tracking-tight">O que fazer agora?</h2>
               {a.direction && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs font-semibold">
                   <DirectionIcon className="size-3.5" />
-                  Direção: {a.direction}
+                  {a.direction}
                 </span>
               )}
             </div>
-
-            {!a.lowMargin && a.adsMaxPercent > 0 && inputs.salePrice > 0 && (
-              <div className="mt-4 flex items-center gap-3 rounded-lg bg-muted/50 p-4">
-                <Wallet className="size-5 shrink-0 text-primary" />
-                <p className="text-sm leading-relaxed">
-                  Você pode pagar até <strong className="text-base">{formatBRL(a.cpaMax)}</strong> de ADS por venda
-                  <span className="block text-xs text-muted-foreground">
-                    ADS máximo: {a.adsMaxPercent}% do faturamento · ROAS mínimo: {a.roasMin}x
-                    {a.phase === "RANK" ? " · Orçamento: ilimitado" : ""}
-                  </span>
-                </p>
-              </div>
-            )}
 
             <div className="mt-4 flex flex-col gap-2 text-sm leading-relaxed">
               {recommendation.map((line) => (
@@ -526,40 +562,52 @@ export function RoasAnalyzer() {
               ))}
             </div>
 
-            {a.phase === "ESCALA" && !a.lowMargin && a.status !== "AGUARDANDO" && (
-              <dl className="mt-4 grid grid-cols-2 gap-2 rounded-lg border p-3 text-sm sm:grid-cols-4">
-                {[
-                  ["ROAS atual", formatRoas(inputs.configuredRoas)],
-                  ["ROAS real", formatRoas(inputs.realRoas)],
-                  ["ROAS mínimo", `${a.roasMin}x`],
-                  ["Limite permitido", `≥ ${a.roasMin}x`],
-                ].map(([k, v]) => (
-                  <div key={k}>
-                    <dt className="text-xs text-muted-foreground">{k}</dt>
-                    <dd className="font-semibold tabular-nums">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-
-            {!a.lowMargin && a.roasMin > 0 && (a.status === "AJUSTAR" || a.configuredBelowFloor) && (
-              <div className="mt-4 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm font-semibold text-destructive">
-                <ShieldCheck className="size-4 shrink-0" />
-                LIMITE DE SEGURANÇA: {a.roasMin}x
+            {a.suggestedPrice !== null && (
+              <div className="mt-4 flex items-start gap-3 rounded-lg border border-primary/40 bg-primary/10 p-4">
+                <Tag className="mt-0.5 size-5 shrink-0 text-primary" />
+                <p className="text-sm leading-relaxed">
+                  <strong>Caminho recomendado: suba o preço para {formatBRL(a.suggestedPrice)}.</strong>{" "}
+                  Assim você rankeia com {formatRoas(Math.max(a.recommendedRoas, ROAS_RANK))} sem prejuízo e ainda sobra{" "}
+                  {formatBRL(a.suggestedPriceProfit)} por venda.
+                  <span className="block text-xs text-muted-foreground">
+                    Ou mantenha o preço atual e aceite o prejuízo só nas primeiras {RANK_SALES_THRESHOLD} vendas.
+                  </span>
+                </p>
               </div>
             )}
 
-            {a.lowMargin && inputs.salePrice > 0 && (
+            {a.noSales && (
               <div className="mt-4 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm font-semibold text-destructive">
                 <AlertTriangle className="size-4 shrink-0" />
-                MARGEM MUITO BAIXA
+                Sem vendas em 3 dias: baixe o ROAS, nunca aumente.
               </div>
             )}
+          </section>
+
+          <section className="rounded-xl border bg-card p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <CalendarClock className="size-4" /> Como rodar a campanha
+            </h2>
+            <ul className="mt-3 flex flex-col gap-2 text-sm leading-relaxed">
+              <li>
+                <strong>R$ {DAILY_BUDGET} por dia</strong> e deixe rodar <strong>3 dias sem mexer</strong>.
+              </li>
+              <li>
+                Vendeu? Mantenha o ROAS até a próxima meta de vendas.
+              </li>
+              <li>
+                3 dias sem venda em {ROAS_RANK}x? Baixe para <strong>{ROAS_UNLOCK}x</strong>. Não aumente.
+              </li>
+              <li>
+                {RANK_SALES_THRESHOLD} vendas → {ROAS_TRACTION}x · {PROFIT_SALES_THRESHOLD} vendas →{" "}
+                {PROFIT_LADDER.join("x, ")}x para lucrar.
+              </li>
+            </ul>
           </section>
         </div>
       </div>
 
-      <RoasScale a={a} configured={inputs.configuredRoas} real={inputs.realRoas} />
+      <RoasLadder a={a} inputs={inputs} />
 
       {/* Histórico */}
       <section className="rounded-xl border bg-card">
@@ -587,10 +635,9 @@ export function RoasAnalyzer() {
                   <th className="px-3 py-3 font-medium">Data</th>
                   <th className="px-3 py-3 text-right font-medium">Vendas</th>
                   <th className="px-3 py-3 text-right font-medium">Margem</th>
-                  <th className="px-3 py-3 text-right font-medium">ROAS mín.</th>
                   <th className="px-3 py-3 text-right font-medium">Config.</th>
-                  <th className="px-3 py-3 text-right font-medium">Real</th>
-                  <th className="px-3 py-3 text-right font-medium">CPA máx.</th>
+                  <th className="px-3 py-3 text-right font-medium">Usar</th>
+                  <th className="px-3 py-3 text-right font-medium">Por venda</th>
                   <th className="px-3 py-3 font-medium">Status</th>
                   <th className="px-3 py-3 font-medium">Ação</th>
                   <th className="px-5 py-3 text-right font-medium">
@@ -613,9 +660,8 @@ export function RoasAnalyzer() {
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums">{entry.inputs.salesCount}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{formatPct(entry.margin, 1)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{formatRoas(entry.roasMin)}</td>
                     <td className="px-3 py-3 text-right tabular-nums">{formatRoas(entry.inputs.configuredRoas)}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{formatRoas(entry.inputs.realRoas)}</td>
+                    <td className="px-3 py-3 text-right font-semibold tabular-nums">{formatRoas(entry.roasMin)}</td>
                     <td className="px-3 py-3 text-right tabular-nums">
                       {entry.cpaMax > 0 ? formatBRL(entry.cpaMax) : "—"}
                     </td>
@@ -647,11 +693,6 @@ export function RoasAnalyzer() {
           </div>
         )}
       </section>
-
-      <p className="text-xs text-muted-foreground">
-        Regra: menos de {RANK_SALES_THRESHOLD} vendas = RANK. A partir de {RANK_SALES_THRESHOLD} vendas o produto entra
-        em modo ESCALA e a recomendação compara o ROAS real com o configurado, sempre respeitando o ROAS mínimo.
-      </p>
     </div>
   )
 }
